@@ -74,7 +74,7 @@ Then open `http://localhost:8000`. The player uses the audio clock to synchroniz
 
 ## Verification and explicit limitations {#verification}
 
-This delivery has not yet completed real-model end-to-end generation and listening, or actual browser playback acceptance. The automated tests below do not establish that those acceptance checks have passed. Deploy usable model services and weights and complete playback checks in an environment where the browser can run.
+Real-model end-to-end generation and listening remain unverified and require usable model services and weights. A synthetic package passed actual Chromium playback, pause, forward/backward image seeking, chapter switching, and playback-rate retention in GitHub Actions. This does not establish real speech or image model quality. See `docs/verification/book-modes-2026-10-21.md` in the repository for evidence.
 
 Unit tests check separation of emotion from text, capability rejection, bridge parameters, complete coverage, pauses, and mixing. Integration tests use real ffmpeg WAV/MP3 encoding and decoding and verify packages and completion receipts. Synthetic waveforms in tests are engineering fixtures, not TTS output.
 
