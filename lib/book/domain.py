@@ -121,6 +121,7 @@ def invalidate_changed_audio(book: BookDocument) -> list[str]:
     invalidated = []
     for segment in all_segments(book):
         if segment.selected_audio_version is not None and selected_audio(book, segment) is None:
+            segment.selected_audio_version = None
             segment.status = "pending"
             segment.task_id = None
             segment.error = None
@@ -320,6 +321,8 @@ def replace_segment_text(book: BookDocument, segment_id: str, text: str) -> Book
     segment = next((item for item in all_segments(result) if item.id == segment_id), None)
     if segment is None:
         raise BookValidationError(f"Unknown speech segment: {segment_id}")
+    if replacement == segment.text:
+        return result
     old_end = segment.source_end
     delta = len(replacement) - len(segment.text)
     result.normalized_text = (
@@ -329,10 +332,18 @@ def replace_segment_text(book: BookDocument, segment_id: str, text: str) -> Book
     segment.text = replacement
     segment.source_end += delta
     segment.pronunciation = []
+    segment.selected_audio_version = None
+    segment.status = "pending"
+    segment.task_id = None
+    segment.error = None
     for following in all_segments(result):
         if following.id != segment_id and following.source_start >= old_end:
-            following.source_start += delta
-            following.source_end += delta
+            if delta > 0:
+                following.source_end += delta
+                following.source_start += delta
+            else:
+                following.source_start += delta
+                following.source_end += delta
             for override in following.pronunciation:
                 override.source_start += delta
                 override.source_end += delta

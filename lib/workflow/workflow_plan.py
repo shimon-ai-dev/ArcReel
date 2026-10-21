@@ -382,6 +382,34 @@ def build_workflow_plan(
     """
 
     plan_problems = [workflow_problem(problem) for problem in project_problems or []]
+    if getattr(status.project, "output_mode", "video") != "video":
+        tasks = list(task_observations or [])
+        complete = bool(status.artifacts.get("book", {}).get("complete", False))
+        state = (
+            WorkflowStepState.COMPLETED
+            if complete
+            else WorkflowStepState.ACTIVE
+            if tasks
+            else WorkflowStepState.BLOCKED
+            if status.blockers
+            else WorkflowStepState.READY
+        )
+        return WorkflowPlan(
+            status=status,
+            steps=[
+                WorkflowPlanStep(
+                    id="book",
+                    state=state,
+                    required=True,
+                    action=None if complete else status.next_action,
+                    artifacts=dict(status.artifacts.get("book", {})),
+                    tasks=tasks,
+                )
+            ],
+            blockers=list(status.blockers),
+            problems=plan_problems,
+            next_action=status.next_action,
+        )
 
     try:
         rules = workflow_rule(status.project.content_mode, status.project.generation_mode).steps

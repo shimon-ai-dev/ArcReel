@@ -418,6 +418,22 @@ class GenerationQueue:
         # at each caller. Nothing is created and nothing is billed.
         await self.assert_project_migration_ok(project_name)
 
+        from lib.project.output_mode import is_book_project
+        from lib.project.project_manager import get_project_manager
+
+        try:
+            project = await asyncio.to_thread(
+                (self._project_manager or get_project_manager()).load_project, project_name
+            )
+        except FileNotFoundError:
+            project = {}
+        if is_book_project(project):
+            allowed = {"book_tts", "book_export"}
+            if project.get("output_mode") == "illustrated_audiobook":
+                allowed.add("book_keyframe")
+            if task_type not in allowed:
+                raise ValueError("Book projects use book generation tasks, not video workflow tasks")
+
         script_file = _normalized_script_file(script_file)
 
         if task_type == "reference_video":

@@ -98,6 +98,22 @@ class WorkflowPlanner:
                 task_observations=[],
                 admission=None,
             )
+        if getattr(status.project, "output_mode", "video") != "video":
+            observations = []
+            for task_status in ("queued", "running"):
+                result = await queue.list_tasks(project_name=project_name, status=task_status, page_size=200)
+                for row in result.get("tasks", []):
+                    if row.get("task_type") not in {"book_tts", "book_keyframe", "book_export"}:
+                        continue
+                    observations.append(
+                        WorkflowTaskObservation(
+                            unit_id=str(row["resource_id"]),
+                            task_id=str(row["task_id"]),
+                            task_type=str(row["task_type"]),
+                            status=str(row["status"]),
+                        )
+                    )
+            return build_workflow_plan(status, task_observations=observations)
         facts = await self._script_facts(project_name, status)
         structure_problems = self._structure_problems(facts)
         tasks = await self._active_tasks(project_name, status, facts, user_id=user_id, queue=queue)

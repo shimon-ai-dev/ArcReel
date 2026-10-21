@@ -20,6 +20,7 @@ from lib.book.domain import (
 from lib.book.models import AudioVersion, Keyframe, PronunciationOverride, SoundEffect, VoiceProfile
 from lib.book.status import book_status
 from lib.book.store import BookConflictError, BookStore
+from lib.infra.content_digest import sha256_file
 from lib.infra.json_io import atomic_write_json
 from lib.project.project_manager import ProjectManager
 
@@ -144,7 +145,12 @@ def test_completion_requires_successful_current_export_not_just_audio(tmp_path: 
     (tmp_path / "book").mkdir()
     atomic_write_json(
         tmp_path / "book/export.json",
-        {"fingerprint": book_fingerprint(book), "files": ["chapter.wav"], "illustrated": False},
+        {
+            "fingerprint": book_fingerprint(book),
+            "files": ["chapter.wav"],
+            "illustrated": False,
+            "resource_digests": {name: sha256_file(tmp_path / name) for name in ("chapter.wav", "speech.wav")},
+        },
     )
     assert book_status(book, tmp_path)["complete"]
     assert book_status(book, tmp_path)["speech_quality"] == "not_assessed"
@@ -184,3 +190,53 @@ def test_text_edit_preserves_ids_other_audio_and_original_history(tmp_path: Path
     assert selected_audio(revised, unchanged) is not None
     assert unchanged.source_start == 6
     assert [path.read_text() for path in (store.path.parent / "source_history").glob("*.txt")] == [book.original_text]
+
+
+def test_long_source_edit_updates_offsets_without_transient_invalid_ranges() -> None:
+    from lib.book.domain import replace_segment_text
+
+    book = import_book("你好。再见。", max_segment_chars=3)
+    first, second = all_segments(book)
+    updated = replace_segment_text(book, first.id, "这是比原句长得多的一段话。")
+    validate_coverage(updated)
+    assert all_segments(updated)[1].id == second.id
+    assert all_segments(updated)[1].source_start == len("这是比原句长得多的一段话。")
+
+
+def test_quote_import_keeps_attribution_separate_without_guessing_speaker() -> None:
+    book = import_book("小明说：“你是谁？”小红说：“是我。”")
+    assert [segment.text for segment in all_segments(book)] == ["小明说：", "“你是谁？”", "小红说：", "“是我。”"]
+    assert all(segment.speaker_id == "narrator" and not segment.speaker_confirmed for segment in all_segments(book))
+
+
+def test_book_store_rejects_symlink_parent(tmp_path: Path) -> None:
+    projects = ProjectManager(tmp_path)
+    project_dir = projects.projects_dir / "book"
+    project_dir.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (project_dir / "book").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="symbolic"):
+        BookStore(projects, "book")
+    assert list(outside.iterdir()) == []
+
+
+def test_status_rejects_changed_speech_bytes(tmp_path: Path) -> None:
+    book = import_book("你好。")
+    segment = all_segments(book)[0]
+    audio = tmp_path / "speech.wav"
+    audio.write_bytes(b"original speech")
+    segment.audio_versions = [
+        AudioVersion(
+            id="v1",
+            path="speech.wav",
+            duration_seconds=1,
+            fingerprint=segment_fingerprint(book, segment),
+            content_digest=sha256_file(audio),
+        )
+    ]
+    segment.selected_audio_version = "v1"
+    segment.status = "succeeded"
+    assert book_status(book, tmp_path)["ready_to_export"]
+    audio.write_bytes(b"replaced speech")
+    assert book_status(book, tmp_path)["missing_audio"] == [segment.id]

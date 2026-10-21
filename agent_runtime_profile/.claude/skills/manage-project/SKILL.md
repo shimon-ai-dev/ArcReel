@@ -8,6 +8,8 @@ user-invocable: false
 
 提供 project.json 的角色/场景/道具批量写入、项目级 settings 与项目概述编辑，以及视频模型能力查询。
 
+书籍模式优先分流：output_mode 为 audiobook 或 illustrated_audiobook 时改用 book-production skill 与 book_project 工具；本 skill 的视频模型、分镜及视频旁白流程不适用。
+
 ## 工具一览
 
 | 工具 | 功能 | 调用者 |

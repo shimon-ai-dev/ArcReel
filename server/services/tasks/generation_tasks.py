@@ -1888,6 +1888,11 @@ async def execute_generation_task(task: dict[str, Any], *, claimed_provider_id: 
     if not task_type:
         raise ValueError("task.task_type is required")
 
+    if task_type in {"book_tts", "book_keyframe", "book_export"}:
+        from server.services.book.service import execute_book_task
+
+        return await execute_book_task(task)
+
     executor = _TASK_EXECUTORS.get(task_type)
     if task_type.startswith("text_"):
         from server.tool_runtime import execute_queued_text_task

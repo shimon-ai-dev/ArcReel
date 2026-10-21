@@ -654,6 +654,9 @@ async def request_logging_middleware(
 # 认证要求的唯一真相源就是这个区块：带 dependencies 的 router 要求 Bearer token，
 # 端点签名里的 CurrentUser 只表示「处理函数要用用户对象」，不承担授权职责。
 # 不挂依赖的两组另有说明，见下方分组注释。
+from server.routers import books
+
+app.include_router(books.router, prefix="/api/v1", dependencies=[Depends(get_current_user)], tags=["书籍制作"])
 app.include_router(projects.router, prefix="/api/v1", dependencies=[Depends(get_current_user)], tags=["项目管理"])
 app.include_router(characters.router, prefix="/api/v1", dependencies=[Depends(get_current_user)], tags=["角色管理"])
 app.include_router(scenes.router, prefix="/api/v1", dependencies=[Depends(get_current_user)], tags=["场景管理"])

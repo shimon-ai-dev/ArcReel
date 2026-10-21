@@ -31,7 +31,7 @@ class Performance(BookModel):
 class VoiceProfile(BookModel):
     id: str = Field(min_length=1)
     name: str = ""
-    adapter: str = "openai"
+    adapter: str = "provider"
     model: str = ""
     base_url: str = ""
     voice: str = ""
@@ -115,7 +115,24 @@ class SoundEffect(BookModel):
         return validate_resource_path(value)
 
 
+class ImageVersion(BookModel):
+    id: str = Field(min_length=1)
+    path: str = Field(min_length=1)
+    prompt: str = ""
+    provider: str | None = None
+    model: str | None = None
+    reference_paths: list[str] = Field(default_factory=list)
+    created_at: str = ""
+    content_digest: str | None = None
+
+    @field_validator("path")
+    @classmethod
+    def relative_path(cls, value: str) -> str:
+        return validate_resource_path(value)
+
+
 class Keyframe(BookModel):
+    versions: list[ImageVersion] = Field(default_factory=list)
     id: str = Field(min_length=1)
     segment_id: str = Field(min_length=1)
     offset_seconds: float = Field(default=0, ge=0)

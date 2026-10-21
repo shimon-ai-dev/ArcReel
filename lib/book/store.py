@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from lib.book.domain import invalidate_changed_audio, validate_coverage
 from lib.book.models import BookDocument
+from lib.book.paths import book_media_path
 from lib.infra.json_io import atomic_write_bytes, atomic_write_json, load_json
 from lib.project.project_activity import record_project_activity
 from lib.project.project_manager import ProjectManager
@@ -21,16 +22,18 @@ class BookStore:
         self.projects = projects
         self.project_name = project_name
         self.project_dir = projects.get_project_path(project_name)
-        self.path = self.project_dir / "book" / "book.json"
+        self.path = book_media_path(self.project_dir, "book/book.json")
 
     def load(self) -> BookDocument:
         """Read and validate the book. Absent books raise FileNotFoundError."""
+        book_media_path(self.project_dir, "book/book.json")
         book = BookDocument.model_validate(load_json(self.path))
         validate_coverage(book)
         return book
 
     def save(self, book: BookDocument, *, expected_revision: int | None = None) -> BookDocument:
         """Write a detached validated copy; optimistic revision defaults to document revision."""
+        book_media_path(self.project_dir, "book/book.json")
         with self.projects.file_lock(self.path):
             current = self.load() if self.path.exists() else None
             expected = book.revision if expected_revision is None else expected_revision
@@ -41,6 +44,7 @@ class BookStore:
 
     def update(self, mutator: Callable[[BookDocument], BookDocument | None]) -> BookDocument:
         """Serialize task completion against edits; mutate the latest document under one lock."""
+        book_media_path(self.project_dir, "book/book.json")
         with self.projects.file_lock(self.path):
             current = self.load()
             revision = current.revision
@@ -57,7 +61,7 @@ class BookStore:
             previous = self.load()
             if previous.original_text != document.original_text:
                 content = previous.original_text.encode("utf-8")
-                history = self.path.parent / "source_history"
+                history = book_media_path(self.project_dir, "book/source_history")
                 history.mkdir(exist_ok=True)
                 atomic_write_bytes(history / f"{hashlib.sha256(content).hexdigest()}.txt", content)
         atomic_write_json(self.path, document.model_dump(mode="json"))

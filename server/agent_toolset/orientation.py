@@ -2,15 +2,36 @@
 
 from __future__ import annotations
 
+import asyncio
+
+from lib.project.output_mode import is_book_project
 from lib.workflow.workflow_plan import WorkflowPlanRequest
 from server.agent_toolset.declaration import READ_CHECK, Exempt, ToolDeclaration
 from server.tool_runtime import (
     NoArguments,
     PromptPreviewRequest,
+    ToolOutcome,
+    ToolProblem,
     get_prompt_preview,
-    get_video_capabilities,
     get_workflow_plan,
 )
+from server.tool_runtime import (
+    get_video_capabilities as video_capabilities,
+)
+
+
+async def get_video_capabilities(request, scope, caller, services):
+    project = await asyncio.to_thread(services.projects.load_project, scope.project_name)
+    if is_book_project(project):
+        return ToolOutcome(
+            problem=ToolProblem(
+                "book_has_no_video_workflow",
+                "Use book_project status for audiobook capabilities.",
+                action="book_project",
+            )
+        )
+    return await video_capabilities(request, scope, caller, services)
+
 
 GET_WORKFLOW_PLAN = ToolDeclaration(
     name="get_workflow_plan",

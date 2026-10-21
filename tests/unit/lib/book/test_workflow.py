@@ -5,6 +5,7 @@ from pathlib import Path
 from lib.book.domain import all_segments, book_fingerprint, import_book, segment_fingerprint
 from lib.book.models import AudioVersion
 from lib.book.store import BookStore
+from lib.infra.content_digest import sha256_file
 from lib.infra.json_io import atomic_write_json
 from lib.project.project_manager import ProjectManager
 from lib.project.project_schema import CURRENT_PROJECT_SCHEMA_VERSION
@@ -52,7 +53,12 @@ def test_book_status_and_summary_are_audio_first_and_export_gated(tmp_path: Path
     assert service.get_episode_next_steps("book")[0].next_action.args["tool"] == "book_project"
     atomic_write_json(
         project_dir / "book/export.json",
-        {"fingerprint": book_fingerprint(book), "files": ["speech.wav"], "illustrated": False},
+        {
+            "fingerprint": book_fingerprint(book),
+            "files": ["speech.wav"],
+            "illustrated": False,
+            "resource_digests": {"speech.wav": sha256_file(project_dir / "speech.wav")},
+        },
     )
     complete = service.get_status("book")
     assert complete.next_action.type == WorkflowActionType.NONE

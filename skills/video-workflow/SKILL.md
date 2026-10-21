@@ -7,6 +7,10 @@ description: 当用户要求创建视频、新建或继续项目、推进下一�
 
 以已连接的 ArcReel MCP 服务作为项目状态的唯一来源。每次项目级工具调用都必须显式指定项目，不依赖本地项目文件或 Agent 宿主的工作目录。
 
+## 书籍输出优先分流
+
+若计划的 status.project.output_mode 为 audiobook 或 illustrated_audiobook，使用 book_project 而非下方视频流程。先 action=status，再 import_source 导入全文，save_document 配置角色声音、独立表演、停顿、音效与关键帧；edit_segment 修改一句；generate 生成/重试语音；keyframe 生成图片；export 输出音频及图声书包。保留稳定 ID、源文位置和当前 revision，不在原文插入表演提示，不按视频时长删减。排队/运行中不算完成，只有当前 status.complete 为真才报告结束；试听质量独立于覆盖验证。audiobook 不需要图片，两个书籍模式均不需要视频模型、视频能力或 MP4。
+
 ## 按计划路由
 
 1. 使用 ArcReel 项目工具确定项目。尚无项目时，先收集创建所需信息并创建项目。

@@ -24,7 +24,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi import Path as FastAPIPath
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 # fastapi 只 re-export 复数的 BackgroundTasks，单数版本只能取 starlette。
@@ -266,6 +266,7 @@ def _validated_speech_rate(value: float, _t: Translator) -> float:
 
 
 class CreateProjectRequest(BaseModel):
+    output_mode: Literal["video", "audiobook", "illustrated_audiobook"] = "video"
     name: str | None = None
     title: str | None = None
     style: str | None = ""  # 保留但不再是用户入口
@@ -281,7 +282,7 @@ class CreateProjectRequest(BaseModel):
     brief: str | None = None
     # 生成模式：创建时必须显式选择 storyboard 或 reference_video；缺失或旧 grid 值由
     # Pydantic 校验返回 422。创建后不可更改（PATCH 模型结构上无此字段）。
-    generation_mode: Literal["storyboard", "reference_video"]
+    generation_mode: Literal["storyboard", "reference_video"] | None = None
     # 宫格分镜开关：只改变分镜图的生产方式，不是独立生成模式；仅 storyboard 生成模式有意义，
     # 创建后可经项目 PATCH 随时切换。ad 项目拒绝开启。
     grid_storyboard: bool = False
@@ -310,6 +311,14 @@ class CreateProjectRequest(BaseModel):
     audio_backend: str | None = None
     narration_voice: str | None = None
     narration_speed: float | None = None
+
+    @model_validator(mode="after")
+    def output_constraints(self) -> CreateProjectRequest:
+        if self.output_mode == "video" and self.generation_mode is None:
+            raise ValueError("Video projects require generation_mode")
+        if self.output_mode != "video" and (self.content_mode == "ad" or self.grid_storyboard):
+            raise ValueError("Book output does not support advertising or video grids")
+        return self
 
 
 class EpisodePatch(BaseModel):
@@ -742,7 +751,8 @@ async def create_project(
                 extras["model_settings"] = req.model_settings
             # 生成模式与宫格开关并入 extras 一次性写入，避免 create 后再 load-save 的额外 RMW；
             # 两字段恒写显式值（grid_storyboard 默认 false 也落盘），新项目即 v5 完整形态
-            extras["generation_mode"] = req.generation_mode
+            extras["output_mode"] = req.output_mode
+            extras["generation_mode"] = req.generation_mode or "storyboard"
             extras["grid_storyboard"] = req.grid_storyboard
             if speech_rate is not None:
                 extras[SPEECH_RATE_FIELD] = speech_rate

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from server.agent_toolset.books import BOOK_TOOLS
 from server.agent_toolset.content_read import CONTENT_READ_TOOLS
 from server.agent_toolset.declaration import AgentToolDeclaration, Blocked, ToolDeclaration
 from server.agent_toolset.edit_timelines import EDIT_TIMELINE_TOOLS
@@ -22,6 +23,7 @@ from server.agent_toolset.workflow_completion import WORKFLOW_COMPLETION_TOOLS
 
 AGENT_TOOLSET: tuple[AgentToolDeclaration, ...] = (
     *PROJECT_ENTRY_TOOLS,
+    *BOOK_TOOLS,
     *ORIENTATION_TOOLS,
     *GENERATION_BATCH_TOOLS,
     *CONTENT_READ_TOOLS,

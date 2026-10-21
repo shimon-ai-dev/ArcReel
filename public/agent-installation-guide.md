@@ -29,3 +29,7 @@ MCP 端点：
 ## 4. 完成判据
 
 `list_projects` 调用成功并返回结构化 `projects` 列表，且宿主 MCP 与工作区配置指向同一连接时即完成；空列表也是成功。
+
+## 有声书与图声书
+
+创建项目可指定独立 output_mode：audiobook 或 illustrated_audiobook；缺失按 video。书籍模式通过 book_project 工具管理完整原文、角色声音、性能指令、音效、稳定锚点和导出。先用 action=status 读取模型能力和覆盖结果，再编辑文档或提交生成；不要查询或生成视频。完整流程和参数以 MCP 工具 schema 为准，模型排队不等于生成成功，文本覆盖验证不等于声音质量验收。

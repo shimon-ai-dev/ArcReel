@@ -1641,6 +1641,7 @@ async def _execute_draft_repair(
 
 
 class CreateProjectToolRequest(BaseModel):
+    output_mode: Literal["video", "audiobook", "illustrated_audiobook"] = "video"
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str = Field(description="项目唯一标识，只能包含字母、数字和连字符；后续工具以它寻址项目")
@@ -1679,6 +1680,8 @@ class CreateProjectToolRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_mode_fields(self) -> CreateProjectToolRequest:
+        if self.output_mode != "video" and (self.content_mode == "ad" or self.grid_storyboard):
+            raise ValueError("Book output does not support advertising or video grids")
         if self.content_mode == "ad":
             if self.default_duration is not None:
                 raise ValueError("广告/短片项目不持有 default_duration")
@@ -1788,6 +1791,7 @@ async def create_project(
                 aspect_ratio=value.aspect_ratio,
                 default_duration=value.default_duration,
                 extras={
+                    "output_mode": value.output_mode,
                     "generation_mode": value.generation_mode,
                     "grid_storyboard": value.grid_storyboard,
                 },

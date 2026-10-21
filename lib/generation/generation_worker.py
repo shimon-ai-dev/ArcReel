@@ -405,6 +405,8 @@ async def _extract_provider(task: dict[str, Any]) -> str:
     物化请求，与认领槽位不一致时回队。
     解析失败（未配置供应商）时回退到 DEFAULT_PROVIDER 仅供限流，不阻断认领。
     """
+    if task.get("task_type") == "book_tts":
+        return str(task.get("provider_id") or "book-indextts2")
     project_name = task.get("project_name")
     raw_payload = task.get("payload")
     payload = raw_payload if isinstance(raw_payload, dict) else {}

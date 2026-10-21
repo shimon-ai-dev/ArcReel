@@ -2065,6 +2065,13 @@ class ProjectManager:
         self._touch_metadata(project)
 
         with self._project_lock(project_name):
+            if project_file.exists():
+                previous = load_json(project_file)
+                if ("schema_version" in previous or "metadata" in previous) and project_output_mode(
+                    previous
+                ) != project_output_mode(project):
+                    raise ValueError("output_mode is fixed when a project is created")
+            project["output_mode"] = project_output_mode(project)
             if self._requires_unique_asset_namespace(project):
                 ensure_project_asset_namespace(project)
             atomic_write_json(project_file, project)
@@ -2249,7 +2256,10 @@ class ProjectManager:
         # 变更可能把条目移出账本：先让历史最高号记下变更前的集 ID
         raise_episode_id_high_water(project)
         planning_inputs = source_planning_inputs(project)
+        output_mode = project_output_mode(project)
         mutate_fn(project)
+        if project_output_mode(project) != output_mode:
+            raise ValueError("output_mode is fixed when a project is created")
         # 分集规划、手工切分、重新规划采纳、重置与删集都经由这里改账本：账本或源文登记变了，
         # 就按盘上源文重记源文是否还有未规划的原文，项目列表读它而不读源文
         if source_planning_inputs(project) != planning_inputs:

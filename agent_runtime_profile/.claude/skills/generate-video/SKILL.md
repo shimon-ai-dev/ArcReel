@@ -5,6 +5,8 @@ description: 为分镜或自包含视频单元生成视频。当用户要求生�
 
 # 生成视频
 
+书籍模式优先分流：output_mode 为 audiobook 或 illustrated_audiobook 时改用 book-production skill 与 book_project 工具；本 skill 的视频模型、分镜及视频旁白流程不适用。
+
 ## 路由
 
 让 MCP 工具读取 `project.json`，按 `generation_mode` × `content_mode` 分派，并校验剧本骨架：
