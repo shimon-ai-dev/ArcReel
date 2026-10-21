@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import wave
 
 import httpx
@@ -182,3 +183,52 @@ async def test_worker_admits_book_audio_without_any_video_provider(file_db_facto
             await worker.stop()
     recorded = await queue.get_task(task["task_id"])
     assert recorded["status"] == "succeeded"
+
+
+async def test_three_persistent_voices_emotion_pause_and_partial_voice_change(generation_queue) -> None:
+    store = await asyncio.to_thread(_create_book)
+    book = await asyncio.to_thread(store.load)
+    voices = ("narrator", "lin-lan", "chen-zhou")
+    book.voices = {
+        name: VoiceProfile(
+            id=name,
+            adapter="indextts2",
+            model="IndexTTS2",
+            base_url="http://127.0.0.1:7861",
+            reference_audio=f"{name}.wav",
+        )
+        for name in voices
+    }
+    for index, segment in enumerate(all_segments(book)):
+        segment.speaker_id = voices[index % 3]
+        segment.speaker_confirmed = True
+    surprised = all_segments(book)[1]
+    surprised.performance.emotion = "surprised"
+    surprised.performance.intensity = 0.8
+    surprised.pause_after_seconds = 0.5
+    await asyncio.to_thread(store.save, book)
+    with respx.mock() as mock:
+        endpoint = mock.post("http://127.0.0.1:7861/synthesize").mock(return_value=httpx.Response(200, content=_wav()))
+        await enqueue_speech("book-test")
+        await _run_pending(generation_queue, "audio")
+        requests = [json.loads(call.request.content) for call in endpoint.calls]
+        assert {item["reference_audio"] for item in requests} == {f"{name}.wav" for name in voices}
+        expressive = next(item for item in requests if item["emotion_text"] == "surprised")
+        assert expressive["emotion_intensity"] == 0.8
+        assert expressive["text"] == surprised.text
+        before = await asyncio.to_thread(store.load)
+        versions = {item.id: item.selected_audio_version for item in all_segments(before)}
+        await enqueue_export("book-test")
+        await _run_pending(generation_queue, "render")
+        state = await asyncio.to_thread(snapshot, "book-test")
+        assert state["status"]["complete"] is True
+        assert state["timeline"]["duration_seconds"] == pytest.approx(len(requests) * 0.25 + 0.5)
+        before.voices["lin-lan"].reference_audio = "lin-lan-new.wav"
+        await asyncio.to_thread(save_document, "book-test", before)
+        changed = await enqueue_speech("book-test")
+        expected = [item for item in all_segments(before) if item.speaker_id == "lin-lan"]
+        assert len(changed["task_ids"]) == len(expected)
+        await _run_pending(generation_queue, "audio")
+        after = await asyncio.to_thread(store.load)
+        for segment in all_segments(after):
+            assert (segment.selected_audio_version != versions[segment.id]) is (segment.speaker_id == "lin-lan")

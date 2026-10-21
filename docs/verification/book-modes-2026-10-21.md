@@ -23,12 +23,12 @@ Backend command:
   tests/integration/server/routers/test_books.py tests/unit/server/test_book_tools.py -q
 ```
 
-Result: **65 passed**, with two upstream deprecation/reflection warnings.
+Result: **66 passed**, with two upstream deprecation/reflection warnings.
 
 Coverage includes:
 
 - exact source preservation, missing/duplicate/reordered source rejection, stable IDs and local source corrections;
-- chapters, shared voices, separate pronunciation mappings and synthesis cache identities;
+- chapters, shared voices, separate pronunciation mappings and synthesis cache identities; an end-to-end HTTP-boundary test routes three reference voices, surprise intensity and measured pause, then regenerates only the changed character;
 - TTS HTTP/official Python parameter contracts, unsupported-control rejection and visible failure;
 - real WAV/MP3 encoding, chapter and whole-book audio, silence length, ducking, loops, cross-chapter fades;
 - actual DB/provider/resolver/ComfyUI adapter path with two generated HTTP-fixture images;
@@ -44,7 +44,7 @@ cd frontend
 node_modules/.bin/vitest run src/components/book/*.test.ts src/components/book/*.test.tsx src/components/pages/CreateBookProjectModal.test.tsx
 ```
 
-Frontend checks use `tsc --noEmit`, targeted ESLint, Vite production build, and focused book-only Vitest suites. DOM tests cover creation without image/video providers, audio seek/backseek, rate retention, chapter image changes, retiming, voice adapter switching and non-destructive keyframe density planning.
+Frontend checks use `tsc --noEmit`, full-project ESLint, Knip, Vite production build, and focused book-only Vitest suites. DOM tests cover creation without image/video providers, audio seek/backseek, rate retention, chapter image changes, retiming, voice adapter switching and non-destructive keyframe density planning.
 
 Static checks passed: Ruff, format, all nine import-layer contracts, dependency hygiene, repository convention/test audits, and focused basedpyright for all new core/service/router/Agent/bridge modules (zero errors/warnings). Website full check passed; a bounded-heap `docusaurus build --no-minify` successfully built both Chinese and English routes with no broken links/anchors. Seven documentation-tool tests passed. An initial whole-repository basedpyright attempt exited 247 without diagnostics; a subsequent serial run with `NODE_OPTIONS=--max-old-space-size=3072` passed with zero errors/warnings. The standard website production build exited 137 with Killed twice and is not recorded as passed; the unminified bilingual build passed. Exact final results and logs accompany the delivered archive.
 
