@@ -94,6 +94,7 @@ Published pages also declare their documentation-refresh coverage tier via the `
 | `README.md` | Product positioning, core value, and the shortest path to getting started | A complete model list, every environment variable, or internal implementation details |
 | `website/docs/index.mdx` | Documentation-site positioning, primary entry points, and a navigation overview | Complete instructions for specific features |
 | `website/docs/guide/getting-started.md` | The complete path from deployment to the first final video | Production-grade reverse proxy and backup strategies |
+| `website/docs/guide/book-modes.md` | Audiobook and illustrated audiobook production, local emotional TTS, audio mixing, synchronized playback, and export limitations | Model weight installation tutorials and claims of real-model acceptance |
 | `website/docs/guide/workflows.md` | Content modes, generation modes, content review checkpoints, and selection guidance | Provider credentials and operations commands |
 | `website/docs/guide/providers.md` | Provider types, capability coverage, selection principles, and configuration hierarchy | Price promises likely to become outdated |
 | `website/docs/guide/comfyui.md` | Importing ComfyUI workflows, node binding, conversion semantics for size/duration/seed, testing, and runtime limits | Deploying ComfyUI itself or installing custom nodes |

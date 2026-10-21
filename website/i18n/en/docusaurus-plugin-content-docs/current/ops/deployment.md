@@ -727,3 +727,7 @@ Do not directly delete files referenced by current projects. Prefer archiving pr
 - [ ] Configure disk space and health-check alerts;
 - [ ] Confirm that model API keys do not appear in logs or the repository;
 - [ ] Read the license and `NOTICE`.
+
+### Book output mode compatibility {#book-output-mode-upgrade}
+
+Audiobooks and illustrated audiobooks use an independent `output_mode` and project-local `book/` data. Existing projects without `output_mode` are read as `video`; their files are not rewritten just to add the default. The existing meanings of `content_mode` and `generation_mode` remain unchanged. Back up the project's `book/` directory before upgrading and use matching frontend and backend versions. Model services require separate preparation; upgrading does not install TTS weights or create credentials. See [Audiobooks and illustrated audiobooks](../guide/book-modes.md) for configuration and export instructions.
