@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Route, Switch, Redirect, useParams } from "wouter";
 import { useTranslation } from "react-i18next";
+import { BookWorkspace } from "@/components/book/BookWorkspace";
 import { StudioLayout } from "@/components/layout";
 import { StudioCanvasRouter } from "@/components/canvas/StudioCanvasRouter";
 import { ProjectsPage } from "@/components/pages/ProjectsPage";
@@ -131,6 +132,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 function StudioWorkspace() {
   const params = useParams<{ projectName: string }>();
   const projectName = params.projectName ?? null;
+  const projectData = useProjectsStore((state) => state.currentProjectData);
   const { setCurrentProject, setProjectDetailLoading } = useProjectsStore();
   const { t } = useTranslation("onboarding");
   // 把 t 通过 ref 暴露给首屏加载的 onError 回调，避免切语言触发 t 重建 → effect
@@ -195,6 +197,12 @@ function StudioWorkspace() {
     if (!projectName || !isDemoProject(projectName)) return;
     setCurrentProject(projectName, buildDemoProjectData(t), buildDemoScripts(t));
   }, [projectName, setCurrentProject, t]);
+
+  if (!projectData) return <LoadingState variant="pane" />;
+
+  if (projectName && projectData?.output_mode && projectData.output_mode !== "video") {
+    return <BookWorkspace key={projectName} project={projectName} title={projectData.title} illustrated={projectData.output_mode === "illustrated_audiobook"} />;
+  }
 
   return (
     <StudioLayout>

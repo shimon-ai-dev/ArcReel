@@ -183,6 +183,7 @@ export interface ModelSettingEntry {
 }
 
 export interface ProjectData {
+  output_mode?: "video" | "audiobook" | "illustrated_audiobook";
   title: string;
   content_mode: "narration" | "drama" | "ad";
   style: string;

@@ -18,6 +18,7 @@ const ENQUEUE_METHODS = [
   "authorPrompts",
   "continueEpisodeReplan",
   "editImage",
+  "enqueueBookTask",
   "exportJianyingDraft",
   "generateAdScript",
   "generateCharacter",

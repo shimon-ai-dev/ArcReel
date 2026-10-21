@@ -15,6 +15,9 @@ const TASKS_PAGE_SIZE = 200;
  * 收紧为联合类型即为把「拼错就静默不占用」的失败模式提前到编译期。
  */
 export type ResourceKind =
+  | "book_tts"
+  | "book_keyframe"
+  | "book_export"
   | "character"
   | "character_derivative"
   | "scene"

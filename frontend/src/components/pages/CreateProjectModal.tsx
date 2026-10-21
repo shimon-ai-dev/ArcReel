@@ -9,6 +9,9 @@ import { DEFAULT_TEMPLATE_ID } from "@/data/style-templates";
 import { errMsg, voidCall, voidPromise } from "@/utils/async";
 import { formatNameList } from "@/utils/list-format";
 import { catalogDisplayNames, catalogDurations } from "@/utils/provider-models";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { BookSelect } from "@/components/book/BookSelect";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { isValidEpisodeTargetDuration } from "@/components/shared/EpisodeTargetDurationField";
@@ -89,6 +92,8 @@ export function CreateProjectModal() {
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
+  const [outputMode, setOutputMode] = useState<"video" | "audiobook" | "illustrated_audiobook">("video");
+  const isBook = outputMode !== "video";
   const [step, setStep] = useState<WizardStep>(1);
   const [basics, setBasics] = useState<WizardBasicsValue>({
     title: "",
@@ -195,7 +200,9 @@ export function CreateProjectModal() {
   // 当前步骤还缺的必填项与需要修正的字段，按界面上的顺序列出
   const missing: string[] = [];
   const invalid: string[] = [];
-  if (step === 1) {
+  if (isBook) {
+    if (!basics.title.trim()) missing.push(t("project_title"));
+  } else if (step === 1) {
     if (!basics.title.trim()) missing.push(t("project_title"));
     if (!basics.contentMode) missing.push(t("content_mode"));
     if (!basics.generationRoute) missing.push(t("generation_route"));
@@ -209,7 +216,7 @@ export function CreateProjectModal() {
     if (narrationProblem === "model") missing.push(t("project_tts_model_label"));
     if (narrationProblem === "voice") missing.push(t("narration_voice_label"));
   }
-  const generationLoading = step === 2 && !generationData && !generationError;
+  const generationLoading = !isBook && step === 2 && !generationData && !generationError;
   const blocked = missing.length > 0 || invalid.length > 0 || generationLoading;
   const hint =
     missing.length > 0
@@ -225,6 +232,19 @@ export function CreateProjectModal() {
   };
 
   const handleCreate = async () => {
+    if (isBook) {
+      if (!basics.title.trim()) return;
+      setCreating(true);
+      try {
+        const result = await API.createProject({ title: basics.title.trim(), output_mode: outputMode });
+        setShowCreateModal(false);
+        navigate(`/app/projects/${result.name}`);
+      } catch (error) {
+        useAppStore.getState().pushToast(t("create_project_failed", { message: errMsg(error) }), "error");
+        setCreating(false);
+      }
+      return;
+    }
     const { contentMode, generationRoute } = basics;
     if (!contentMode || !generationRoute) return;
     setCreating(true);
@@ -302,7 +322,7 @@ export function CreateProjectModal() {
 
   const handleNext = () => {
     if (blocked) return;
-    if (step === 3) {
+    if (isBook || step === 3) {
       voidPromise(handleCreate)();
       return;
     }
@@ -321,13 +341,26 @@ export function CreateProjectModal() {
         <DialogHeader>
           <DialogTitle>{t("new_project")}</DialogTitle>
           <div className="mt-1.5">
-            <WizardStepper current={step} />
+            {!isBook && <WizardStepper current={step} />}
           </div>
         </DialogHeader>
 
         <DialogBody ref={bodyRef}>
-          {step === 1 && <WizardStepBasics value={basics} onChange={handleBasicsChange} titleRef={titleRef} />}
-          {step === 2 && (
+          <div className="mb-4 grid gap-2">
+            <Label htmlFor="project-output-mode">{t("book_output_mode")}</Label>
+            <BookSelect id="project-output-mode" value={outputMode} disabled={creating} onChange={(value) => setOutputMode(value as typeof outputMode)} options={[
+              { value: "video", label: t("book_mode_video") },
+              { value: "audiobook", label: t("book_mode_audiobook") },
+              { value: "illustrated_audiobook", label: t("book_mode_illustrated") },
+            ]} />
+          </div>
+          {isBook && <div className="grid gap-2">
+            <Label htmlFor="book-project-title">{t("project_title")}</Label>
+            <Input ref={titleRef} id="book-project-title" value={basics.title} onChange={(event) => setBasics({ ...basics, title: event.target.value })} />
+            <p className="text-sm text-muted-foreground">{t(outputMode === "audiobook" ? "book_create_audio_hint" : "book_create_illustrated_hint")}</p>
+          </div>}
+          {!isBook && step === 1 && <WizardStepBasics value={basics} onChange={handleBasicsChange} titleRef={titleRef} />}
+          {!isBook && step === 2 && (
             <WizardStepGeneration
               isAd={isAd}
               usesReferenceImages={basics.generationRoute === "reference_video"}
@@ -341,7 +374,7 @@ export function CreateProjectModal() {
               error={generationError}
             />
           )}
-          {step === 3 && <StylePicker value={style} onChange={changeStyle} />}
+          {!isBook && step === 3 && <StylePicker value={style} onChange={changeStyle} />}
         </DialogBody>
 
         <DialogFooter>
@@ -351,14 +384,14 @@ export function CreateProjectModal() {
           <p id={hintId} className="min-w-0 flex-1 text-right text-xs text-muted-foreground">
             {hint}
           </p>
-          {step > 1 && (
+          {!isBook && step > 1 && (
             <Button variant="outline" onClick={() => goTo((step - 1) as WizardStep)} disabled={creating}>
               {t("templates:prev_step")}
             </Button>
           )}
           <Button onClick={handleNext} disabled={blocked || creating} aria-describedby={hint ? hintId : undefined}>
             {creating && <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden />}
-            {step === 3 ? t("create_project") : t("templates:next_step")}
+            {isBook || step === 3 ? t("create_project") : t("templates:next_step")}
           </Button>
         </DialogFooter>
       </DialogContent>

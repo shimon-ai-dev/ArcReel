@@ -407,6 +407,13 @@ class API {
     return requestJson<T>(endpoint, options);
   }
 
+  static async enqueueBookTask(projectName: string, operation: string, payload: unknown): Promise<{ task_ids: string[] }> {
+    return this.request(`/projects/${encodeURIComponent(projectName)}/book${operation}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   // ==================== 系统配置 ====================
 
   static async getSystemConfig(options: { signal?: AbortSignal } = {}): Promise<GetSystemConfigResponse> {

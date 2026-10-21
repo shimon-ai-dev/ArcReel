@@ -209,12 +209,13 @@ export interface AgentProfileStatus {
 
 /** Payload for {@link API.createProject}. */
 export interface CreateProjectPayload {
+  output_mode?: "video" | "audiobook" | "illustrated_audiobook";
   title: string;
   name?: string;
   content_mode?: "narration" | "drama" | "ad";
   aspect_ratio?: "9:16" | "16:9";
   /** 生成模式，创建时必填二选一、无默认值（后端缺失即 422）。 */
-  generation_mode: GenerationRoute;
+  generation_mode?: GenerationRoute;
   /** 多宫格分镜装配开关，可随创建写入；仅分镜图生视频有意义。 */
   grid_storyboard?: boolean;
   /** 口播语速估算（阅读单位 / 秒）；留空即按项目语言的默认速度估算。 */
