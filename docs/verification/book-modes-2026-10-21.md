@@ -46,18 +46,24 @@ node_modules/.bin/vitest run src/components/book/*.test.ts src/components/book/*
 
 Frontend checks use `tsc --noEmit`, full-project ESLint, Knip, Vite production build, and focused book-only Vitest suites. DOM tests cover creation without image/video providers, audio seek/backseek, rate retention, chapter image changes, retiming, voice adapter switching and non-destructive keyframe density planning.
 
-Static checks passed: Ruff, format, all nine import-layer contracts, dependency hygiene, repository convention/test audits, and focused basedpyright for all new core/service/router/Agent/bridge modules (zero errors/warnings). Website full check passed; a bounded-heap `docusaurus build --no-minify` successfully built both Chinese and English routes with no broken links/anchors. Seven documentation-tool tests passed. An initial whole-repository basedpyright attempt exited 247 without diagnostics; a subsequent serial run with `NODE_OPTIONS=--max-old-space-size=3072` passed with zero errors/warnings. The standard website production build exited 137 with Killed twice and is not recorded as passed; the unminified bilingual build passed. Exact final results and logs accompany the delivered archive.
+Static checks passed: Ruff, format, all nine import-layer contracts, dependency hygiene, repository convention/test audits, and focused basedpyright for all new core/service/router/Agent/bridge modules (zero errors/warnings). Website full check passed; a bounded-heap `docusaurus build --no-minify` successfully built both Chinese and English routes with no broken links/anchors. Seven documentation-tool tests passed. An initial whole-repository basedpyright attempt exited 247 without diagnostics; a subsequent serial run with `NODE_OPTIONS=--max-old-space-size=3072` passed with zero errors/warnings. The standard website production build exited 137 with Killed twice and is not recorded as passed; the unminified bilingual build passed. The reproducible GitHub checks and logs are linked below.
 
 Per the user's later instruction, dedicated video-mode tests and real video generation were intentionally not run. Existing video code paths and validations were retained, but this delivery does not claim video regression acceptance.
 
-## Actual-model and browser acceptance not passed
+## GitHub publication and real browser verification
+
+The user fork is [shimon-ai-dev/ArcReel](https://github.com/shimon-ai-dev/ArcReel/tree/feat/book-output-modes). Nine phased commits were published on the feature branch without modifying main. The published code tree exactly matches the locally tested tree.
+
+[Book-only GitHub Actions run 39591809508](https://github.com/shimon-ai-dev/ArcReel/actions/runs/39591809508) completed successfully on commit `5330bd201f6345f06d2c0992eea0619f293859da` at 2026-10-21 11:28 UTC. Backend checks passed all 66 tests, frontend checks passed 9 tests across 6 files, and all configured lint/type/build gates passed. No dedicated video suite or real model inference ran.
+
+The real Chromium job generated and unpacked a synthetic package and opened its HTML directly. It verified advancing audio playback, stable pause, exact forward/backward seek images, chapter switching, retained 1.5x speed, positive 4.5-second chapter duration, and no player errors. This closes the portable-package browser execution gap; it does not establish speech or image model quality.
+
+## Actual-model acceptance not passed
 
 - No usable local TTS or ComfyUI model service/GPU was available in this environment. Local IndexTTS2 synthesis and local ComfyUI inference remain unverified.
 - The official hosted IndexTTS2 public demo accepted a test request but returned `ZeroGPU quota exceeded`; no audio was produced. Hosted-demo availability is not local-deployment proof.
 - Fish's hosted free endpoint needs account credentials. Credentials were not created or configured, and no paid fallback was used. Fish is not claimed as an implemented/tested book adapter.
-- Native Chromium could not launch under the current sandbox; the alternate cloud-browser attempt did not complete. Actual unpacked-package browser playback is not claimed. DOM tests and a production build do not substitute for that acceptance step.
 - No human/model listening evaluation has passed. Text coverage does not establish correct pronunciation, emotion, actor identity or voice quality.
-- GitHub fork/push depends on the authorized user's sign-in. Local commits/source bundles do not establish that a fork was created or pushed.
 
 ## Example and limitations
 
@@ -65,4 +71,4 @@ Per the user's later instruction, dedicated video-mode tests and real video gene
 
 Importer speaker attribution is deliberately conservative: narration/unconfirmed until corrected by the user or Agent. IndexTTS2 declares Chinese/English, reference audio, emotion vectors or emotion text. It does not claim native speed or nonverbal controls; supplied sound effects must carry provenance and voice-consistency caveats. Replacing an external reference audio file under the same name requires updating the voice reference digest/version so cached speech invalidates.
 
-M4B, automatic sound-effect synthesis and slideshow-video conversion remain outside this first-version scope. The local bridge is loopback-only and does not configure remote authentication or network access. Mixing uses 24 kHz mono output and processes individual chapters in memory; unusually long chapters should be split. Image/voice quality, production-scale performance, and actual browser/model acceptance remain required before calling the full requested acceptance complete.
+M4B, automatic sound-effect synthesis and slideshow-video conversion remain outside this first-version scope. The local bridge is loopback-only and does not configure remote authentication or network access. Mixing uses 24 kHz mono output and processes individual chapters in memory; unusually long chapters should be split. Image/voice quality, production-scale performance, and actual model acceptance remain required before calling the full requested acceptance complete.
