@@ -61,6 +61,8 @@ def validate_controls(request: BookSynthesisRequest, capabilities: SpeechCapabil
         len(request.emotion_vector) != 8 or any(not 0 <= v <= 1 for v in request.emotion_vector)
     ):
         raise ValueError("IndexTTS emotion vector must contain eight values in [0, 1]")
+    if request.emotion_intensity != 1.0 and not (request.emotion_vector or request.emotion_text):
+        raise UnsupportedSpeechControl("Emotion intensity requires an emotion vector or description")
     if request.emotion_vector and request.emotion_text:
         raise ValueError("Choose either an emotion vector or an emotion description")
 

@@ -17,7 +17,7 @@ export function BookEvents({ project, book, illustrated, onChange, disabled, run
 }) {
   const { t } = useTranslation("dashboard");
   const [density, setDensity] = useState(5);
-  const options = book.chapters.flatMap((chapter) => chapter.segments.map((segment, index) => ({ value: segment.id, label: `${chapter.title} · ${index + 1} · ${segment.text.slice(0, 30)}` })));
+  const options = book.chapters.flatMap((chapter) => chapter.segments.map((segment, index) => ({ value: segment.id, label: `${chapter.title} · ${index + 1} · ${Array.from(segment.text).slice(0, 30).join("")}` })));
   const updateEffect = (id: string, patch: Partial<BookEffect>) => onChange({ ...book, effects: book.effects.map((effect) => effect.id === id ? { ...effect, ...patch } : effect) });
   const updateFrame = (id: string, patch: Partial<BookKeyframe>) => onChange({ ...book, keyframes: book.keyframes.map((frame) => frame.id === id ? { ...frame, ...patch } : frame) });
   const uploadEffect = async (file: File) => {

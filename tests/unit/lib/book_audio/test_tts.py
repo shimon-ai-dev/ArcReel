@@ -71,3 +71,11 @@ def test_bridge_constrains_references_and_maps_official_parameters(tmp_path: Pat
     assert calls[0]["text"] == "正文"
     assert calls[0]["emo_vector"] == [0, 0, 0, 0, 0, 0, 0.5, 0]
     assert calls[0]["use_random"] is False
+
+
+async def test_intensity_without_emotion_is_not_silently_ignored(tmp_path: Path, respx_mock):
+    with pytest.raises(ValueError, match="intensity requires"):
+        await IndexTTS2HTTPAdapter("http://127.0.0.1:7861").synthesize(
+            BookSynthesisRequest("正文", tmp_path / "speech.wav", reference_audio="voice.wav", emotion_intensity=0.5)
+        )
+    assert not respx_mock.calls

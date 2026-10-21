@@ -5,13 +5,14 @@ import type { BookSegment } from "@/types/book";
 
 export function BookPronunciation({ segment, update, disabled }: { segment: BookSegment; update: (next: BookSegment["pronunciation"]) => void; disabled: boolean }) {
   const { t } = useTranslation("dashboard");
+  const characters = Array.from(segment.text);
   return <details>
     <summary className="cursor-pointer text-sm font-medium">{t("book_pronunciation")}</summary>
     <p className="my-2 text-sm text-muted-foreground">{t("book_pronunciation_hint")}</p>
     <div className="grid gap-3">{segment.pronunciation.map((item, index) => {
       const change = (patch: Partial<typeof item>) => {
         const next = { ...item, ...patch };
-        next.original = segment.text.slice(next.source_start - segment.source_start, next.source_end - segment.source_start);
+        next.original = characters.slice(next.source_start - segment.source_start, next.source_end - segment.source_start).join("");
         update(segment.pronunciation.map((value, at) => at === index ? next : value));
       };
       return <fieldset key={index} disabled={disabled} className="grid gap-2 rounded-lg border p-3">
@@ -22,6 +23,6 @@ export function BookPronunciation({ segment, update, disabled }: { segment: Book
         <div><Button variant="outline" onClick={() => update(segment.pronunciation.filter((_, at) => at !== index))}>{t("book_remove_draft")}</Button></div>
       </fieldset>;
     })}</div>
-    <Button variant="outline" disabled={disabled} onClick={() => update([...segment.pronunciation, { source_start: segment.source_start, source_end: segment.source_start + 1, original: segment.text.slice(0, 1), spoken: segment.text.slice(0, 1) }])}>{t("book_add_pronunciation")}</Button>
+    <Button variant="outline" disabled={disabled} onClick={() => update([...segment.pronunciation, { source_start: segment.source_start, source_end: segment.source_start + 1, original: characters[0] ?? "", spoken: characters[0] ?? "" }])}>{t("book_add_pronunciation")}</Button>
   </details>;
 }
