@@ -728,3 +728,7 @@ find projects/projects -type f -size +500M
 - [ ] 配置磁盘和健康检查告警；
 - [ ] 确认模型 API Key 不出现在日志和仓库；
 - [ ] 阅读许可证和 `NOTICE`。
+
+### 书籍输出模式兼容 {#book-output-mode-upgrade}
+
+有声书与图声书使用独立的 `output_mode` 和项目内 `book/` 数据。旧项目缺少 `output_mode` 时按 `video` 读取，不为了补默认值重写旧项目文件；`content_mode` 与 `generation_mode` 的原有语义不变。升级前应连同 `book/` 目录备份项目数据，前后端应使用同一版本。模型服务需另外准备，升级不会安装 TTS 权重或创建凭据。配置与导出说明见[有声书与图声书](../guide/book-modes.md)。
