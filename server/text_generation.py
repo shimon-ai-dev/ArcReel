@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import re
-import unicodedata
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
@@ -25,6 +24,7 @@ from lib.backends.providers import CallPurpose
 from lib.backends.text_backends.base import DEFAULT_MAX_OUTPUT_TOKENS, TextOutputTruncatedError, TextTaskType
 from lib.backends.text_backends.base import TextGenerationRequest as BackendTextGenerationRequest
 from lib.backends.text_generator import TextGenerator
+from lib.book.coverage import covers_source_verbatim, normalize_for_coverage
 from lib.catalog.errors import ModelNotInCatalogError
 from lib.config.resolver import ConfigResolver
 from lib.episode.episode_ids import describe_episode_for_agent
@@ -1445,7 +1445,7 @@ def _normalize_for_coverage(text: str) -> str:
     回写 NFC，不归一会把纯编码形式差异判成删字改字，而覆盖违约会落成草稿、堵住内容确认
     确认与 prompt_authoring 生成。
     """
-    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", text)).strip()
+    return normalize_for_coverage(text)
 
 
 def _coverage_source_scope(source: str | None, *, episode: int) -> str:
@@ -1468,14 +1468,7 @@ def _covers_source_verbatim(parts: list[str], source: str) -> bool:
     数百 KB），而本判定在拆分、晋升与内容确认的读时重算三处各跑一次，内容确认那次还在请求
     协程里——每次都按源文规模编译一条正则，代价压在事件循环上。游标扫描是同一判定的线性写法。
     """
-    cursor = 0
-    for index, part in enumerate(parts):
-        if index and source.startswith(" ", cursor):
-            cursor += 1
-        if not source.startswith(part, cursor):
-            return False
-        cursor += len(part)
-    return cursor == len(source)
+    return covers_source_verbatim(parts, source)
 
 
 def _collect_narration_violations(

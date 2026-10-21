@@ -18,6 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from lib.artifacts.artifact_activation import ArtifactComparer, ArtifactCurrencyResolver, RegisteredArtifactResolver
 from lib.artifacts.artifact_manifest import ArtifactKey, ArtifactManifestError, ArtifactStatus
+from lib.book.domain import all_segments, book_fingerprint, build_timeline
+from lib.book.status import book_status
+from lib.book.store import BookStore
 from lib.edit_timeline.errors import EditTimelineError
 from lib.edit_timeline.store import EditTimelineStore
 from lib.episode.episode_ledger import (
@@ -39,6 +42,7 @@ from lib.project.asset_derivatives import derivative_artifact_key, derivative_ta
 from lib.project.asset_types import ASSET_SPECS, asset_name_comparison_key
 from lib.project.data_validator import DataValidator
 from lib.project.episode_asset_references import episode_referenced_assets
+from lib.project.output_mode import OutputMode, is_book_project, project_output_mode
 from lib.project.project_manager import ProjectManager, is_reference_video_project
 from lib.project.project_migration_failure import (
     MIGRATION_FAILURE_CODE,
@@ -95,6 +99,7 @@ class WorkflowProject(BaseModel):
     content_mode: str
     generation_mode: str
     grid_storyboard: bool
+    output_mode: OutputMode = "video"
 
 
 class WorkflowTarget(BaseModel):
@@ -276,6 +281,7 @@ def workflow_finished(status: WorkflowStatus) -> bool:
     return status.next_action.type is WorkflowActionType.NONE and status.next_action.reason in {
         EPISODE_COMPLETE_REASON,
         ALL_EPISODES_COMPLETE_REASON,
+        "book export is current",
     }
 
 
@@ -823,6 +829,8 @@ class WorkflowStateService:
         failure = load_migration_verdict(project_path)
         if failure is not None:
             return self._migration_blocked_status(project, failure)
+        if is_book_project(project):
+            return self._book_status(project_name, project, episode)
         shared = self._shared_facts(project_path, project)
         status = self._get_status(project_name, project, project_path, episode, shared)
         status.migration_report = visible_migration_report(project_path)
@@ -844,6 +852,19 @@ class WorkflowStateService:
             return []
         if not isinstance(project, dict) or load_migration_verdict(project_path) is not None:
             return []
+        if is_book_project(project):
+            try:
+                book = BookStore(self.pm, project_name).load()
+            except (OSError, ValueError):
+                return []
+            return [
+                EpisodeNextStep(
+                    episode=index,
+                    plan_stale=False,
+                    next_action=self._book_status(project_name, project, index).next_action,
+                )
+                for index, _chapter in enumerate(book.chapters, 1)
+            ]
         shared = self._shared_facts(project_path, project)
         if shared.blockers:
             return []
@@ -881,6 +902,8 @@ class WorkflowStateService:
         failure = load_migration_verdict(project_path)
         if failure is not None:
             return self._migration_blocked_summary(project, self._episodes(project, []), failure)
+        if is_book_project(project):
+            return self._book_summary(project_name, project)
         episodes = self._episodes(project, [])
         try:
             resolver: ArtifactComparer | None = (
@@ -912,6 +935,128 @@ class WorkflowStateService:
             episodes_summary=_episodes_summary(episode_summaries),
             episodes=episode_summaries,
             source_remaining=stored_source_remaining(project),
+        )
+
+    def _book_status(self, project_name: str, project: dict[str, Any], episode: int | None) -> WorkflowStatus:
+        mode = project_output_mode(project)
+        base = WorkflowProject(
+            content_mode=str(project.get("content_mode", "narration")),
+            generation_mode=str(project.get("generation_mode", "storyboard")),
+            grid_storyboard=False,
+            output_mode=mode,
+        )
+        args: dict[str, Any] = {"tool": "book_project", "action": "import_source"}
+        try:
+            book = BookStore(self.pm, project_name).load()
+        except (OSError, ValueError) as exc:
+            return WorkflowStatus(
+                project_revision=_project_revision(project),
+                source_revision=None,
+                project=base,
+                target=None,
+                blockers=[],
+                issues=[]
+                if isinstance(exc, FileNotFoundError)
+                else [WorkflowBlocker(code="book_invalid", path="book/book.json", reason=str(exc))],
+                content=WorkflowContent(
+                    episode_count=0, whole_source="absent", source_remaining=False, ad_inputs="not_applicable"
+                ),
+                gates={},
+                artifacts={},
+                next_action=_action(WorkflowActionType.FIX_INPUT, "import book source", args=args),
+            )
+        if episode is not None and not 1 <= episode <= len(book.chapters):
+            raise WorkflowRequestError("Book chapter number is out of range")
+        state = book_status(book, self.pm.get_project_path(project_name), illustrated=mode == "illustrated_audiobook")
+        segments = book.chapters[episode - 1].segments if episode is not None else all_segments(book)
+        waiting = any(segment.status in {"queued", "running"} for segment in segments)
+        complete = bool(state["complete"])
+        action_type = WorkflowActionType.FIX_INPUT
+        reason = "configure voices and generate book speech"
+        args["action"] = "generate"
+        if complete:
+            action_type, reason = WorkflowActionType.NONE, "book export is current"
+            args["action"] = "status"
+        elif waiting:
+            action_type, reason = WorkflowActionType.WAIT_FOR_TASK, "book generation tasks are running"
+            args["action"] = "status"
+        elif state["missing_audio"]:
+            if any(segment.speaker_id not in book.voices for segment in segments):
+                args["action"] = "save_document"
+                reason = "configure persistent book voices"
+        elif state["missing_images"]:
+            args["action"] = "status"
+            reason = "generate anchored book keyframes"
+        elif state["missing_effects"]:
+            args["action"] = "save_document"
+            reason = "replace missing book sound assets"
+        else:
+            args["action"] = "export"
+            reason = "export the complete book audio program"
+        return WorkflowStatus(
+            project_revision=_project_revision(project),
+            source_revision=book_fingerprint(book),
+            project=base,
+            target=None,
+            blockers=[],
+            content=WorkflowContent(
+                episode_count=len(book.chapters),
+                whole_source="present",
+                source_remaining=False,
+                ad_inputs="not_applicable",
+                episode_complete=complete if episode else False,
+                project_complete=complete,
+            ),
+            gates={"book": state},
+            artifacts={"book": state},
+            next_action=_action(action_type, reason, args=args),
+        )
+
+    def _book_summary(self, project_name: str, project: dict[str, Any]) -> ProjectSummary:
+        assets = {asset_type: ArtifactCount.zero() for asset_type in ASSET_SPECS}
+        try:
+            book = BookStore(self.pm, project_name).load()
+            state = book_status(
+                book,
+                self.pm.get_project_path(project_name),
+                illustrated=project_output_mode(project) == "illustrated_audiobook",
+            )
+            timeline = build_timeline(book)
+        except (OSError, ValueError) as exc:
+            return ProjectSummary(
+                needs_repair=not isinstance(exc, FileNotFoundError),
+                repair_reason=None if isinstance(exc, FileNotFoundError) else str(exc),
+                assets=assets,
+                episodes_summary=EpisodesSummary(total=0, scripted=0, in_production=0, completed=0),
+                episodes=[],
+                source_remaining=False,
+            )
+        episodes = []
+        for number, chapter in enumerate(book.chapters, 1):
+            duration = sum(
+                segment.duration_seconds + segment.pause_after_seconds
+                for segment in timeline.segments
+                if segment.chapter_id == chapter.id
+            )
+            status: EpisodeProductionStatus = "completed" if state["complete"] else "in_production"
+            episodes.append(
+                EpisodeSummary(
+                    episode=number,
+                    script_status="generated",
+                    status=status,
+                    item_count=len(chapter.segments),
+                    duration_seconds=round(duration),
+                    storyboards=ArtifactCount.zero(),
+                    videos=ArtifactCount.zero(),
+                )
+            )
+        return ProjectSummary(
+            needs_repair=False,
+            repair_reason=None,
+            assets=assets,
+            episodes_summary=_episodes_summary(episodes),
+            episodes=episodes,
+            source_remaining=False,
         )
 
     def _asset_counts(

@@ -102,6 +102,7 @@ from lib.project.asset_types import (
     resolve_asset_key,
     validate_asset_name,
 )
+from lib.project.output_mode import project_output_mode
 from lib.project.project_change_hints import emit_project_change_hint
 from lib.project.project_schema import parse_project_schema_version
 from lib.project.script_entry_cleanup import purge_replaced_entry_media
@@ -1914,7 +1915,9 @@ class ProjectManager:
             raise FileNotFoundError(f"项目元数据文件不存在: {project_file}")
 
         with open(project_file, encoding="utf-8") as f:
-            return json.load(f)
+            project = json.load(f)
+        project["output_mode"] = project_output_mode(project)
+        return project
 
     @contextmanager
     def _project_lock(self, project_name: str):
@@ -2543,6 +2546,7 @@ class ProjectManager:
 
         # 生成模式与宫格开关：路由层已做必填二值校验与 ad 互斥（400/422），这里再兜一道防非路由
         # 调用方；未传时按数据层默认补写显式值，保证新项目落盘即含两字段（与 schema v5 形态对齐）。
+        project["output_mode"] = project_output_mode(project)
         generation_mode = project.setdefault("generation_mode", _DEFAULT_GENERATION_MODE)
         if not isinstance(generation_mode, str) or generation_mode not in VALID_GENERATION_MODES:
             raise ValueError(f"generation_mode 值无效: {generation_mode!r}，必须是 {sorted(VALID_GENERATION_MODES)}")
