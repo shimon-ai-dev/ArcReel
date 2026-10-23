@@ -18,6 +18,7 @@ class SpeechCapabilities:
     reference_audio: bool = False
     speed: bool = False
     nonverbal: tuple[str, ...] = ()
+    reference_transcript: bool = False
     languages: tuple[str, ...] = ("zh", "en")
     max_text_chars: int = 1000
 
@@ -28,6 +29,7 @@ class BookSynthesisRequest:
     output_path: Path
     voice: str = ""
     reference_audio: str | None = None
+    reference_text: str | None = None
     emotion_vector: tuple[float, ...] = ()
     emotion_text: str = ""
     emotion_intensity: float = 1.0
@@ -49,6 +51,8 @@ def validate_controls(request: BookSynthesisRequest, capabilities: SpeechCapabil
         raise UnsupportedSpeechControl("Emotion vectors are not supported")
     if request.emotion_text and not capabilities.emotion_description:
         raise UnsupportedSpeechControl("Emotion descriptions are not supported")
+    if request.reference_text is not None and not capabilities.reference_transcript:
+        raise UnsupportedSpeechControl("Reference transcripts are not supported")
     if request.reference_audio and not capabilities.reference_audio:
         raise UnsupportedSpeechControl("Reference audio is not supported")
     if request.speed != 1.0 and not capabilities.speed:

@@ -44,6 +44,7 @@ export interface WizardDurationValue {
 }
 
 export interface WizardStepGenerationProps {
+  outputMode?: "video" | "audiobook" | "illustrated_audiobook";
   isAd: boolean;
   usesReferenceImages: boolean;
   duration: WizardDurationValue;
@@ -57,6 +58,7 @@ export interface WizardStepGenerationProps {
 }
 
 export function WizardStepGeneration({
+  outputMode = "video",
   isAd,
   usesReferenceImages,
   duration,
@@ -127,12 +129,13 @@ export function WizardStepGeneration({
             globalDefaults={data.globalDefaults}
             usesReferenceImages={usesReferenceImages}
             // 广告项目按目标总时长逐个分镜规划，不暴露默认时长
-            enable={isAd ? { duration: false } : undefined}
+            enable={{ video: outputMode === "video", image: outputMode !== "audiobook", duration: outputMode === "video" && !isAd }}
           />
         )}
       </WizardSection>
+      {outputMode !== "video" && <p className="text-sm text-muted-foreground">{t("book_voice_setup_later")}</p>}
 
-      {data && (
+      {data && outputMode === "video" && (
         <WizardSection title={t("project_narration_delivery_title")}>
           <NarrationDeliveryFields
             value={narration}

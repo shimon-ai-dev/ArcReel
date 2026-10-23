@@ -327,7 +327,11 @@ def plan_storyboard_image_batch(
         # 结果集一个分镜只记一条问题：取首条（未登记排在无资产图之前——名字都没登记时
         # 「去生成资产图」指不出该对谁做），另一条在这条修完后的下一次调用里报出。
         reference_problem = next(
-            iter(reference_admission_problems(admit_storyboard_item(catalog, item), unit_id=state.unit_id)),
+            iter(
+                reference_admission_problems(
+                    admit_storyboard_item(catalog, item, allow_reference_views=True), unit_id=state.unit_id
+                )
+            ),
             None,
         )
         problem = reference_problem

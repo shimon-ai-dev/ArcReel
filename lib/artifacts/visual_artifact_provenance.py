@@ -38,6 +38,8 @@ class VisualReference:
     logical_id: str | None = None
     kind: str | None = None
     content_digest: str | None = field(default=None, compare=False, repr=False)
+    view: str | None = None
+    framing: str | None = None
 
     def __post_init__(self) -> None:
         _require_non_empty("visual reference role", self.role)
@@ -49,6 +51,9 @@ class VisualReference:
             object.__setattr__(self, "logical_id", normalize_asset_name(logical_id))
         if self.kind is not None:
             _require_non_empty("visual reference kind", self.kind)
+        for label, value in (("view", self.view), ("framing", self.framing)):
+            if value is not None:
+                _require_non_empty(f"visual reference {label}", value)
         if self.content_digest is not None:
             _require_sha256("visual reference content_digest", self.content_digest)
 
@@ -66,6 +71,10 @@ class VisualReference:
             }
         if self.kind is not None:
             evidence["kind"] = self.kind
+        if self.view is not None:
+            evidence["view"] = self.view
+        if self.framing is not None:
+            evidence["framing"] = self.framing
         return evidence
 
 

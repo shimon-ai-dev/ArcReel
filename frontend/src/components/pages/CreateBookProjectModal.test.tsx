@@ -17,14 +17,18 @@ beforeEach(() => {
 });
 
 describe("book creation", () => {
-  it.each([["有声书", "audiobook"], ["图声书", "illustrated_audiobook"]])("creates %s without image or video configuration", async (label, mode) => {
+  it.each([["有声书", "audiobook"], ["图声书", "illustrated_audiobook"]])("creates %s through the original chapter project wizard", async (label, mode) => {
     const user = userEvent.setup();
     render(<CreateProjectModal />);
     await user.click(screen.getByRole("combobox", { name: "输出模式" }));
     await user.click(await screen.findByRole("option", { name: label }));
     await user.type(screen.getByRole("textbox", { name: "项目标题" }), "完整小说");
+    await user.click(screen.getByText("剧情演绎", { exact: true }));
+    await user.click(screen.getByRole("button", { name: "下一步" }));
+    expect(screen.queryByText("视频模型", { exact: true })).not.toBeInTheDocument();
+    if (mode !== "audiobook") await user.click(screen.getByRole("button", { name: "下一步" }));
     await user.click(screen.getByRole("button", { name: "创建项目" }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/app/projects/book-test"));
-    expect(API.createProject).toHaveBeenCalledWith({ title: "完整小说", output_mode: mode });
+    expect(API.createProject).toHaveBeenCalledWith(expect.objectContaining({ title: "完整小说", output_mode: mode, content_mode: "drama", generation_mode: "storyboard" }));
   });
 });

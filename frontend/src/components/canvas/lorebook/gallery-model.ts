@@ -1,3 +1,4 @@
+import type { ExternalLibraryIdentity } from "@/types/library-import";
 import type { AssetSheetStatusRow, AssetSheetType, Character, Product, Prop, Scene } from "@/types";
 
 /** 浏览卡展示的资产：四类资产归一后的同一形状，类型差异只体现在可选的计数上。 */
@@ -9,8 +10,9 @@ export interface GalleryAsset {
   sheetPath: string | null;
   aliasCount: number;
   derivativeCount: number;
-  /** 商品原图张数。 */
+  /** 商品原图或外部库多视图张数。 */
   referenceCount: number;
+  externalIdentity?: ExternalLibraryIdentity;
 }
 
 export type GalleryAssetSource = Character | Scene | Prop | Product;
@@ -32,11 +34,12 @@ export function toGalleryAsset(type: AssetSheetType, name: string, asset: Galler
   return {
     type,
     name,
+    externalIdentity: "external_library" in asset ? asset.external_library : undefined,
     description: asset.description ?? "",
     sheetPath: sheetPathOf(type, asset) || null,
     aliasCount: "aliases" in asset ? (asset.aliases?.length ?? 0) : 0,
     derivativeCount: type === "character" ? Object.keys((asset as Character).derivatives ?? {}).length : 0,
-    referenceCount: type === "product" ? ((asset as Product).reference_images?.length ?? 0) : 0,
+    referenceCount: type === "product" ? ((asset as Product).reference_images?.length ?? 0) : "reference_views" in asset ? (asset.reference_views?.length ?? 0) : 0,
   };
 }
 

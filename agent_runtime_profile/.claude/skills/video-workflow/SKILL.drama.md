@@ -4,6 +4,8 @@ description: 将小说转换为短视频的端到端工作流编排器。当用�
 ---
 <!-- mode: drama -->
 
+书籍模式覆盖：audiobook/illustrated_audiobook 仍执行本工作流的原文、章节规划、脚本审阅和资产步骤；图声书继续原分镜图步骤，纯音频跳过视觉步骤。两者都禁止视频能力查询、视频生成与剪辑。读取 get_workflow_plan 的模式化步骤，不自行恢复被跳过阶段；在声音阶段使用 book-production 的 sync_episode/generate/export。
+
 # 视频工作流编排
 
 你（主 Agent）是编排中枢。你**不直接**处理小说原文或生成剧本，而是：

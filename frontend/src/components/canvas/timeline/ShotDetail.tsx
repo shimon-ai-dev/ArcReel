@@ -471,6 +471,8 @@ export function ShotDetail({
   editRef,
 }: ShotDetailProps) {
   const { t } = useTranslation("dashboard");
+  const outputMode = useProjectsStore((s) => s.currentProjectData?.output_mode ?? "video");
+  const isBook = outputMode !== "video";
   const status = statusFromAssets(segment.generated_assets?.status);
   const segCost = useCostStore((s) => s.getSegmentCost(segmentId));
   const isAd = contentMode === "ad";
@@ -808,7 +810,7 @@ export function ShotDetail({
         {renderFormSwitchError("image")}
       </ShotSection>
 
-      <ShotSection
+      {!isBook && <ShotSection
         title={t("detail_video_prompt_title")}
         icon={<Film aria-hidden className="size-3.5" />}
         actions={
@@ -836,7 +838,7 @@ export function ShotDetail({
           />
         )}
         {renderFormSwitchError("video")}
-      </ShotSection>
+      </ShotSection>}
       <span id={formHintId} hidden>
         {t("prompt_form_switch_needs_save")}
       </span>
@@ -1060,7 +1062,7 @@ export function ShotDetail({
       total={totalCount}
       meta={
         <>
-          <DurationPill
+          {!isBook && <DurationPill
             seconds={fields.duration_seconds}
             segmentId={segmentId}
             projectName={projectName}
@@ -1070,9 +1072,9 @@ export function ShotDetail({
             durationWarningReason={durationWarningReason}
             onChange={readOnly ? undefined : (seconds) => setField("duration_seconds", seconds)}
             busy={durationBusy}
-          />
+          />}
           <StatusBadge status={status} />
-          {(isNarration || isDrama) && !readOnly && (
+          {!isBook && (isNarration || isDrama) && !readOnly && (
             <SegmentBreakToggle
               checked={fields.segment_break === true}
               onChange={(next) => setField("segment_break", next)}
@@ -1127,7 +1129,7 @@ export function ShotDetail({
           </>
         }
         media={
-          <ShotMediaGrid aspectRatio={aspectRatio} storyboard={storyboardMedia} video={videoMedia} audio={audioMedia} />
+          <ShotMediaGrid aspectRatio={aspectRatio} storyboard={storyboardMedia} video={isBook ? null : videoMedia} audio={isBook ? null : audioMedia} />
         }
       />
       <AlertDialog open={pendingStructSwitch !== null} onOpenChange={(next) => !next && setPendingStructSwitch(null)}>

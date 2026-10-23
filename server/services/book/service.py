@@ -22,10 +22,12 @@ from lib.book.domain import (
     selected_audio,
     spoken_text,
 )
+from lib.book.episode_bridge import build_episode_book, require_current_episodes, stale_episodes
 from lib.book.models import AudioVersion, BookDocument, ImageVersion, Keyframe, SpeechSegment
 from lib.book.paths import book_media_path
 from lib.book.store import BookStore
 from lib.book_audio.tts import BookSynthesisRequest, ExistingAudioAdapter, IndexTTS2HTTPAdapter
+from lib.book_audio.voxcpm import VoxCPM2HTTPAdapter, VoxCPM2Settings
 from lib.config.resolver import ConfigResolver
 from lib.db import async_session_factory
 from lib.generation.generation_queue import GenerationQueue, get_generation_queue
@@ -64,6 +66,12 @@ def snapshot(project_name: str, *, projects: ProjectManager | None = None) -> di
 
     mode = project_output_mode(store.projects.load_project(project_name))
     status = book_status(book, store.project_dir, illustrated=mode == "illustrated_audiobook")
+    stale = stale_episodes(store.projects, project_name, book)
+    status["stale_episodes"] = stale
+    if stale:
+        status["complete"] = False
+        status["ready_to_export"] = False
+        status["export_current"] = False
     return {
         "book": book.model_dump(mode="json"),
         "timeline": asdict(build_timeline(book)),
@@ -86,10 +94,30 @@ def capabilities() -> dict[str, Any]:
     from lib.book_audio.tts import SpeechCapabilities
 
     return {
+        "voxcpm2": asdict(VoxCPM2HTTPAdapter("").capabilities),
+        "voxcpm2_continuation": asdict(
+            VoxCPM2HTTPAdapter("", settings=VoxCPM2Settings(clone_mode="continuation")).capabilities
+        ),
         "indextts2": asdict(IndexTTS2HTTPAdapter("").capabilities),
         "provider": asdict(SpeechCapabilities()),
         "quality": "Text coverage is validated separately from listening quality; model output requires audition.",
     }
+
+
+def sync_episode(project_name: str, episode: int, *, projects: ProjectManager | None = None) -> BookDocument:
+    """Explicitly synchronize original chapter/storyboard data, preserving legacy work."""
+    from lib.infra.json_io import atomic_write_json
+
+    store = book_store(project_name, projects=projects)
+    old = store.load() if store.path.exists() else None
+    document = build_episode_book(store.projects, project_name, episode, old)
+    if old is not None and old.origin == "legacy":
+        archive = f"book/legacy/{uuid4().hex}.json"
+        path = media_path(store.project_dir, archive)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(path, old.model_dump(mode="json"))
+        document.legacy_archive = archive
+    return store.save(document)
 
 
 def import_source(
@@ -101,6 +129,8 @@ def import_source(
         old = store.load()
     except FileNotFoundError:
         return store.save(book)
+    if old.origin == "episodes":
+        raise ValueError("Edit source through the original chapter workflow, then sync the episode")
     if book.normalized_text == old.normalized_text:
         old.title = title
         old.original_text = text
@@ -146,6 +176,31 @@ def import_source(
 def save_document(project_name: str, document: BookDocument, *, projects: ProjectManager | None = None) -> BookDocument:
     store = book_store(project_name, projects=projects)
     current = store.load()
+    require_current_episodes(store.projects, project_name, current)
+    if current.origin == "episodes":
+        if [
+            (
+                c.id,
+                c.episode,
+                c.workflow_digest,
+                [(s.id, s.text, s.source_start, s.source_end, s.unit_id) for s in c.segments],
+            )
+            for c in document.chapters
+        ] != [
+            (
+                c.id,
+                c.episode,
+                c.workflow_digest,
+                [(s.id, s.text, s.source_start, s.source_end, s.unit_id) for s in c.segments],
+            )
+            for c in current.chapters
+        ]:
+            raise ValueError("Chapter structure and source belong to the original storyboard workflow")
+        if document.keyframes != current.keyframes:
+            raise ValueError("Edit storyboard images in the existing storyboard workflow, then sync")
+    document.sound_cues = current.sound_cues
+    document.origin = current.origin
+    document.legacy_archive = current.legacy_archive
     if (document.original_text, document.normalized_text) != (current.original_text, current.normalized_text):
         raise ValueError("Use source import to change source text")
     old_segments = {item.id: item for item in all_segments(current)}
@@ -214,7 +269,13 @@ def edit_segment(
     from lib.book.domain import replace_segment_text
 
     store = book_store(project_name, projects=projects)
-    return store.update(lambda book: replace_segment_text(book, segment_id, text))
+
+    def change(book: BookDocument) -> BookDocument:
+        if book.origin == "episodes":
+            raise ValueError("Edit source through the original chapter workflow, then sync the episode")
+        return replace_segment_text(book, segment_id, text)
+
+    return store.update(change)
 
 
 async def enqueue_speech(
@@ -229,6 +290,7 @@ async def enqueue_speech(
 ) -> dict[str, Any]:
     store = await asyncio.to_thread(book_store, project_name, projects=projects)
     book = await asyncio.to_thread(store.load)
+    await asyncio.to_thread(require_current_episodes, store.projects, project_name, book)
     segments = all_segments(book)
     requested = set(segment_ids) if segment_ids is not None else {item.id for item in segments}
     unknown = requested - {item.id for item in segments}
@@ -300,6 +362,9 @@ async def enqueue_keyframe(
     if project_output_mode(project) != "illustrated_audiobook":
         raise ValueError("Keyframes require illustrated_audiobook output")
     book = await asyncio.to_thread(store.load)
+    if book.origin == "episodes":
+        raise ValueError("Generate the existing storyboard image, then sync the episode; no separate keyframe pipeline")
+    await asyncio.to_thread(require_current_episodes, store.projects, project_name, book)
     frame = next((item for item in book.keyframes if item.id == frame_id), None)
     if frame is None:
         raise ValueError("Unknown keyframe")
@@ -353,6 +418,7 @@ async def enqueue_export(
         raise ValueError("Export format must be wav or mp3")
     store = await asyncio.to_thread(book_store, project_name, projects=projects)
     book = await asyncio.to_thread(store.load)
+    await asyncio.to_thread(require_current_episodes, store.projects, project_name, book)
     task = await (queue or get_generation_queue()).enqueue_task(
         user_id=user_id,
         source=source,
@@ -376,10 +442,13 @@ async def execute_book_task(
     kind = task["task_type"]
     queued_payload = task.get("payload") or {}
     queued_book = await asyncio.to_thread(store.load)
+    await asyncio.to_thread(require_current_episodes, store.projects, store.project_name, queued_book)
     if kind == "book_tts" and queued_payload.get("fingerprint"):
         queued_segment = next((item for item in all_segments(queued_book) if item.id == resource_id), None)
         if queued_segment is None or segment_fingerprint(queued_book, queued_segment) != queued_payload["fingerprint"]:
             raise ValueError("Queued speech inputs changed; generate the current segment again")
+    if kind == "book_keyframe" and queued_book.origin == "episodes":
+        raise ValueError("Use original storyboard generation for synchronized chapters")
     if kind == "book_keyframe" and "prompt" in queued_payload:
         queued_frame = next((item for item in queued_book.keyframes if item.id == resource_id), None)
         if queued_frame is None or (
@@ -414,6 +483,7 @@ async def execute_book_task(
             format=(task.get("payload") or {}).get("format", "wav"),
             illustrated=project_output_mode(project) == "illustrated_audiobook",
         )
+        await asyncio.to_thread(require_current_episodes, store.projects, project_name, book)
         return {"path": str(result)}
 
     def mark_running(book: BookDocument) -> None:
@@ -483,9 +553,13 @@ async def _execute_media(
         fingerprint = segment_fingerprint(book, segment)
         if (task.get("payload") or {}).get("fingerprint", fingerprint) != fingerprint:
             raise ValueError("Queued speech inputs changed; generate the current segment again")
-        if voice.settings:
+        if voice.settings and voice.adapter != "voxcpm2":
             raise ValueError("Adapter-specific voice settings are not supported by this adapter")
-        if voice.adapter == "indextts2":
+        if voice.adapter == "voxcpm2":
+            if voice.model not in {"", "VoxCPM2", "voxcpm2", "openbmb/VoxCPM2"}:
+                raise ValueError("VoxCPM2 bridge only supports its configured VoxCPM2 model")
+            adapter = VoxCPM2HTTPAdapter(voice.base_url, settings=VoxCPM2Settings.model_validate(voice.settings))
+        elif voice.adapter == "indextts2":
             if voice.voice:
                 raise ValueError("IndexTTS2 uses reference audio, not a voice ID")
             if voice.model not in {"", "IndexTTS2", "indextts2"}:
@@ -509,12 +583,16 @@ async def _execute_media(
         else:
             raise ValueError(f"Unsupported book speech adapter: {voice.adapter}")
         performance = segment.performance
+        reference_audio = voice.reference_audio
+        if voice.adapter == "voxcpm2" and voice.source_character and reference_audio:
+            reference_audio = f"{store.project_name}/{reference_audio}"
         await adapter.synthesize(
             BookSynthesisRequest(
                 text=spoken_text(segment),
                 output_path=output,
                 voice=voice.voice,
-                reference_audio=voice.reference_audio,
+                reference_audio=reference_audio,
+                reference_text=voice.reference_text,
                 emotion_vector=tuple(performance.emotion_vector or []),
                 emotion_text="; ".join(value for value in (performance.emotion, performance.style) if value),
                 emotion_intensity=performance.intensity,
@@ -537,6 +615,7 @@ async def _execute_media(
         )
 
         def commit(current: BookDocument) -> None:
+            require_current_episodes(store.projects, store.project_name, current)
             for item in all_segments(current):
                 if item.id == resource_id:
                     item.audio_versions.append(version)

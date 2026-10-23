@@ -409,6 +409,8 @@ async def fetch_storyboard_durations(
     是用户配置的原样值，收窄后它可能落在集合外，而 ``build_normalize_prompt`` 对非成员 default 是
     fail-loud 的——不归 None 会把「已保存的越界默认时长」变成整个工具的硬失败。
     """
+    if project.get("output_mode", "video") in {"audiobook", "illustrated_audiobook"}:
+        return None, list(range(1, 61))
     facts = require_video_request_facts(await storyboard_request_facts(project, config_resolver))
     durations = planning_durations(facts)
     default = _project_default_duration(project)
@@ -910,6 +912,7 @@ async def generate_drama_script_plan(
             project, config_resolver=config_resolver
         )
         prompt = build_normalize_prompt(
+            output_mode=project.get("output_mode", "video"),
             novel_text=novel_text,
             project_overview=cast(dict[str, Any], prompt_inputs["project_overview"]),
             style=cast(str, prompt_inputs["style"]),
@@ -961,6 +964,9 @@ async def generate_drama_script_plan(
         if not isinstance(raw_scenes, list) or not raw_scenes:
             raise ValueError("script_plan 规范化内容结构异常：scenes 必须是非空的分镜对象数组")
         for scene in raw_scenes:
+            if project.get("output_mode", "video") in {"audiobook", "illustrated_audiobook"}:
+                scene.pop("needs_replan", None)
+                continue
             admission = admit_script_unit("scenes", scene, ignore_marker=True)
             if admission.allowed:
                 scene.pop("needs_replan", None)
@@ -1794,6 +1800,7 @@ async def generate_narration_script_plan(
             project, config_resolver=config_resolver
         )
         prompt = build_narration_split_prompt(
+            output_mode=project.get("output_mode", "video"),
             novel_text=novel_text,
             project_overview=cast(dict[str, Any], prompt_inputs["project_overview"]),
             characters=characters,

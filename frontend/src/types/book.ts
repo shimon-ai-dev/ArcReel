@@ -7,21 +7,23 @@ export interface BookPerformance {
   nonverbal: string | null;
 }
 export interface BookVoice {
+  source_character?: string | null;
   id: string; name: string; adapter: string; model: string; base_url: string; voice: string;
-  reference_audio: string | null; reference_audio_digest: string | null;
+  reference_text?: string | null; reference_audio: string | null; reference_audio_digest: string | null;
   language: string; settings: Record<string, string | number | boolean>;
 }
 export interface BookAudioVersion {
   id: string; path: string; duration_seconds: number; fingerprint: string; created_at: string; content_digest: string | null;
 }
 export interface BookSegment {
+  unit_id?: string | null;
   id: string; source_start: number; source_end: number; text: string;
   speaker_id: string; speaker_confirmed: boolean; performance: BookPerformance; pause_after_seconds: number;
   pronunciation: { source_start: number; source_end: number; original: string; spoken: string }[];
   audio_versions: BookAudioVersion[]; selected_audio_version: string | null;
   status: "pending" | "queued" | "running" | "succeeded" | "failed"; task_id: string | null; error: string | null;
 }
-export interface BookChapter { id: string; title: string; segments: BookSegment[] }
+export interface BookChapter { episode?: number; id: string; title: string; segments: BookSegment[] }
 export interface BookEffect {
   id: string; track: "effects" | "ambience" | "music"; segment_id: string; offset_seconds: number;
   path: string; duration_seconds: number; end_segment_id: string | null; volume: number;
@@ -38,6 +40,8 @@ export interface BookKeyframe {
   status: BookSegment["status"]; task_id: string | null; error: string | null; versions?: BookKeyframeVersion[];
 }
 export interface BookDocument {
+  origin?: "episodes" | string;
+  sound_cues?: { id: string; episode: number; unit_id: string; segment_id: string; end_segment_id: string | null; description: string; track: "ambience" | "sfx" | "music" }[];
   schema_version: 1; revision: number; title: string; original_text: string; normalized_text: string;
   chapters: BookChapter[]; voices: Record<string, BookVoice>; effects: BookEffect[]; keyframes: BookKeyframe[];
 }
@@ -56,7 +60,7 @@ export interface BookState {
   exports?: BookExports | null;
   book: BookDocument | null; timeline: BookTimeline | null;
   capabilities: Record<string, unknown>;
-  status: { ready_to_export?: boolean; missing_effects?: string[]; complete: boolean; coverage_valid: boolean; missing_audio: string[]; missing_images: string[] };
+  status: { stale_episodes?: number[]; ready_to_export?: boolean; missing_effects?: string[]; complete: boolean; coverage_valid: boolean; missing_audio: string[]; missing_images: string[] };
   tasks: { task_id?: string; id?: string; task_type: string; status: string; error?: string | null; error_message?: string | null }[];
 }
 export interface BookExports {

@@ -1,4 +1,7 @@
 MESSAGES = {
+    "ref_multiview_selected": "Selected {max_count} of {count} references for {model}. Sent: {selected}. Omitted: {omitted}.",
+    "reference_views_unconfirmed": "Assets need an explicitly confirmed reference (characters require an identity view): {missing_text}. Confirm the intended library views before generation.",
+    "image_reference_images_exceeded": "This workflow has {limit} reference-image slots but received {count} images for {model}. Preview and reduce the selected references before retrying.",
     "episode_position_name": "Episode {position}",
     "episode_unlisted_name": "Untitled episode",
     "episode_script_name": "Script for “{name}”",

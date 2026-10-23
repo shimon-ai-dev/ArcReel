@@ -1,4 +1,9 @@
 MESSAGES = {
+    "asset_library_import_invalid": "Không thể nhập gói thư viện này. Hãy kiểm tra tệp kê khai và các tệp tải lên rồi xem trước lại",
+    "asset_library_import_stale": "Tài nguyên đã thay đổi sau khi xem trước. Hãy xem trước lại trước khi áp dụng",
+    "asset_library_import_conflict": "Lần nhập này sẽ thay thế tài nguyên được bảo vệ. Hãy giải quyết xung đột trong bản xem trước",
+    "asset_library_import_content_conflict": "Tệp đã lưu không khớp mã nhận dạng nội dung. Không có thay đổi; hãy khôi phục tệp trước khi nhập",
+    "val_asset_library_metadata_invalid": "Tài nguyên '{name}' có siêu dữ liệu thư viện không hợp lệ ở '{field}'",
     "asset_not_found": "Tài nguyên '{name}' không tồn tại",
     "asset_already_exists": "Đã tồn tại tài nguyên cùng loại có tên '{name}'",
     "asset_invalid_type": "Loại tài nguyên phải là character / scene / prop",

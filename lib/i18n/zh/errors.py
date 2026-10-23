@@ -1,4 +1,7 @@
 MESSAGES = {
+    "ref_multiview_selected": "{model} 本次从 {count} 张参考图中选取 {max_count} 张。实发：{selected}。未发：{omitted}。",
+    "reference_views_unconfirmed": "以下资产缺少已明确确认的参考图（角色必须包含身份基准视图）：{missing_text}。请先确认要使用的资产库视图，再生成。",
+    "image_reference_images_exceeded": "{model} 当前工作流只有 {limit} 个参考图槽位，但收到 {count} 张图。请预览并减少所选参考图后重试。",
     "episode_position_name": "第 {position} 集",
     "episode_unlisted_name": "未命名集",
     "episode_script_name": "「{name}」的剧本",

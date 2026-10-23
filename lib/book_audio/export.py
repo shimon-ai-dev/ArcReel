@@ -37,6 +37,9 @@ def build_book_package(
     if format not in ("wav", "mp3"):
         raise ValueError("Only WAV and MP3 export are supported")
     validate_coverage(book)
+    missing_cues = {cue.id for cue in book.sound_cues} - {effect.id for effect in book.effects}
+    if missing_cues:
+        raise ValueError(f"Scene sound cues need audio assets before export: {sorted(missing_cues)}")
     book = book.model_copy(deep=True)
     for segment in all_segments(book):
         audio = selected_audio(book, segment)

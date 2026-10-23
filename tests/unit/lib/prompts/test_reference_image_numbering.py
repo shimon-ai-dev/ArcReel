@@ -129,3 +129,30 @@ class TestClampReferenceImages:
         assert "上限 7" in caplog.text
         assert "道具参考图" in caplog.text
         assert "上一分镜图" in caplog.text
+
+
+def test_multiview_declaration_keeps_identity_appearance_and_pose_roles_separate():
+    references = [
+        VisualReference(
+            path=Path(f"actor-{role}.png"),
+            role=role,
+            logical_type="character",
+            logical_id="演员",
+            kind="library_view",
+            view=view,
+            framing=framing,
+        )
+        for role, view, framing in [
+            ("identity", "front", "headshot"),
+            ("look", "back", "full_body"),
+            ("action", "left", "full_body"),
+        ]
+    ]
+
+    declaration = reference_images_declaration(references)
+
+    assert "图1为演员 / 大头照 / 正面 / 身份基准" in declaration
+    assert "图2为演员 / 全身照 / 背面 / 造型参考" in declaration
+    assert "图3为演员 / 全身照 / 左侧 / 动作参考" in declaration
+    assert "不替换身份或造型" in declaration
+    assert mention_replacements(references) == {"演员": "图1"}

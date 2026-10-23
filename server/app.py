@@ -77,6 +77,7 @@ from server.routers import (
     files,
     generate,
     grids,
+    library_import,
     market,
     market_submissions,
     official_service,
@@ -789,6 +790,7 @@ app.include_router(
     tags=["参考生视频"],
 )
 app.include_router(assets.router, prefix="/api/v1", dependencies=[Depends(get_current_user)], tags=["全局资产库"])
+app.include_router(library_import.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(
     agent_memory.user_router, prefix="/api/v1", dependencies=[Depends(get_current_user)], tags=["Agent 记忆"]
 )

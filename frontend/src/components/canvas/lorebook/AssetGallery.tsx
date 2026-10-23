@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { API } from "@/api";
 import type { LibraryImportPreview } from "@/components/assets/AddToLibraryDialog";
@@ -10,7 +11,8 @@ import { useDemoWorkbench } from "@/onboarding/use-demo-workbench";
 import { useAppStore } from "@/stores/app-store";
 import type { AssetSheetType, WorkspaceFocusTarget } from "@/types";
 import { errMsg } from "@/utils/async";
-import { useAssetBusyNames } from "./assetBusyGuard";
+import { isAssetBusy, useAssetBusyNames } from "./assetBusyGuard";
+import { ExternalLibraryImportDialog } from "./ExternalLibraryImportDialog";
 import { AssetBrowseCard } from "./AssetBrowseCard";
 import { AssetEditorSheet, type AssetEditorTarget } from "./AssetEditorSheet";
 import { AssetImageViewer } from "./AssetImageViewer";
@@ -71,6 +73,10 @@ export function AssetGallery<T extends GalleryAssetSource>({
   const [editorTarget, setEditorTarget] = useState<AssetEditorTarget | null>(null);
   const [viewName, setViewName] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importApplying, setImportApplying] = useState(false);
+  const busyCharacters = useAssetBusyNames("character", projectName);
+  const busyScenes = useAssetBusyNames("scene", projectName);
   // 卡片上在途的上传、版本恢复与删除：查看器里的还原与它们互斥
   const [writingNames, setWritingNames] = useState<ReadonlySet<string>>(() => new Set());
   const handleWritingChange = useCallback((name: string, writing: boolean) => {
@@ -125,6 +131,7 @@ export function AssetGallery<T extends GalleryAssetSource>({
     setEditorTarget({ mode: "edit", name });
   };
 
+  const importBlocked = writingNames.size > 0 || occupiedNames.size > 0 || busyCharacters.size > 0 || busyScenes.size > 0 || Boolean(generatingNames?.size);
   const importable = libraryPreview !== undefined && assetType !== "product";
   const onPickFromLibrary = importable && !readOnly ? () => setPicking(true) : undefined;
   const handleImport = async (ids: string[]) => {
@@ -150,6 +157,11 @@ export function AssetGallery<T extends GalleryAssetSource>({
         onAdd={onAdd}
         onPickFromLibrary={onPickFromLibrary}
       >
+        {!readOnly && (assetType === "character" || assetType === "scene") && (
+          <Button variant="outline" size="sm" disabled={importBlocked || importApplying} onClick={() => { if (!importBlocked && !Object.keys(assets).some((name) => isAssetBusy(assetType, projectName, name))) setImporting(true); }}>
+            <FolderOpen aria-hidden data-icon="inline-start" />{t("external_import_open")}
+          </Button>
+        )}
         {!readOnly && <AssetSheetBatchControls projectName={projectName} assetType={assetType} rows={rows} />}
       </GalleryToolbar>
       <div className="flex shrink-0 flex-col px-5 py-5" data-onboarding={ONBOARDING_ANCHORS.workbenchLorebook}>
@@ -179,7 +191,7 @@ export function AssetGallery<T extends GalleryAssetSource>({
                     sheetStatus={row}
                     marker={markerOf(asset, row, generating)}
                     generating={generating}
-                    busy={occupiedNames.has(asset.name)}
+                    busy={importApplying || occupiedNames.has(asset.name)}
                     readOnly={readOnly}
                     libraryPreview={previews?.get(asset.name)}
                     onOpen={openAsset}
@@ -219,6 +231,8 @@ export function AssetGallery<T extends GalleryAssetSource>({
           onImport={(ids) => void handleImport(ids)}
         />
       )}
+
+      {importing && <ExternalLibraryImportDialog key={projectName} projectName={projectName} blocked={importBlocked} onClose={() => setImporting(false)} onApplyingChange={setImportApplying} />}
 
       <AssetImageViewer
         projectName={projectName}

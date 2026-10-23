@@ -2700,3 +2700,84 @@ def test_unreadable_project_data_returns_only_a_project_blocker(tmp_path: Path, 
     assert status.content is None
     assert status.operations == {}
     assert status.next_action.type == "none"
+
+
+@pytest.mark.parametrize("output_mode", ["audiobook", "illustrated_audiobook"])
+def test_book_modes_use_original_episode_then_audio_without_video(tmp_path, output_mode):
+    pm, project_path = _make_project(tmp_path, "narration")
+    project = pm.load_project("demo")
+    project["output_mode"] = output_mode
+    atomic_write_json(project_path / "project.json", project)
+    source_text = "完整原文"
+    _write_source(pm, project_path, source_text)
+
+    def plan(project):
+        project["output_mode"] = output_mode
+        project["episodes"] = [
+            {
+                "episode": 1,
+                "title": "一",
+                "script_file": "scripts/episode_1.json",
+                "ledger_status": "consumed",
+                "source_range": {"source_file": "source/novel.txt", "start": 0, "end": len(source_text)},
+            }
+        ]
+        project[SOURCE_FINGERPRINTS_KEY] = compute_source_fingerprints(discover_sources(project_path, project))
+
+    pm.update_project("demo", plan)
+    _write_episode_source(project_path, 1, source_text)
+    script_path = project_path / "scripts/episode_1.json"
+    script = {"episode": 1, "title": "一", "content_mode": "narration", "segments": [_valid_narration_segment()]}
+    atomic_write_json(script_path, script)
+    _register_produced_artifacts(project_path)
+    service = WorkflowStateService(pm)
+    status = service.get_status("demo", 1)
+    if output_mode == "illustrated_audiobook":
+        assert status.next_action.type == "generate_storyboards"
+        path = resource_relative_path("storyboards", "E1S01")
+        _write_artifact(project_path, path)
+        script["segments"][0]["generated_assets"]["storyboard_image"] = path
+        atomic_write_json(script_path, script)
+        _register_produced_artifacts(project_path)
+        status = service.get_status("demo", 1)
+    assert status.next_action.args == {"tool": "book_project", "action": "sync_episode", "episode": 1}
+    assert status.target.episode == 1
+    assert status.artifacts["videos"]["state"] == "not_applicable"
+    assert service.get_project_summary("demo").episodes[0].videos.total == 0
+
+
+def test_imported_identity_views_do_not_require_regenerating_character_sheet(tmp_path: Path) -> None:
+    pm, project_path = _make_project(tmp_path, "ad")
+    pm.update_project(
+        "demo",
+        lambda project: project["characters"].update(
+            {
+                "Alice": {
+                    "description": "",
+                    "reference_views": [
+                        {
+                            "path": "characters/refs/identity.png",
+                            "role": "identity",
+                            "view": "front",
+                            "framing": "headshot",
+                            "confirmed": True,
+                            "sha256": "a" * 64,
+                            "archive_version": "v001",
+                            "width": 1,
+                            "height": 1,
+                        }
+                    ],
+                }
+            }
+        ),
+    )
+    _write_artifact(project_path, "characters/refs/identity.png")
+    _write_registered_script(
+        project_path,
+        {"episode": 1, "title": "Demo", "content_mode": "ad", "shots": [_valid_ad_shot(characters_in_shot=["Alice"])]},
+    )
+    status = WorkflowStateService(pm).get_status("demo")
+    assert status.content is not None
+    assert status.content.referenced_assets_without_sheet == []
+    assert status.content.referenced_assets_without_description == []
+    assert status.next_action.type == "generate_storyboards"

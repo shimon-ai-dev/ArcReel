@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { BookEpisodePanel } from "@/components/book/BookEpisodePanel";
 import { useCallback, useEffect, useState } from "react";
 
 import { SourceUploadDialog, type SourceUploadResult } from "@/components/canvas/episodes/SourceUploadDialog";
@@ -32,6 +34,7 @@ function hasStorySetting(overview: ProjectOverview | undefined): boolean {
  * 广告项目没有初始化页：概览常驻「创作灵感」与「商品」区承担首次录入，故事设定在视频页的「故事设定」tab。
  */
 export function OverviewCanvas({ projectName, projectData, readOnly = false }: OverviewCanvasProps) {
+  const { t } = useTranslation("dashboard");
   const isAd = projectData?.content_mode === "ad";
   const debouncedFetch = useCostStore((s) => s.debouncedFetch);
 
@@ -83,6 +86,7 @@ export function OverviewCanvas({ projectName, projectData, readOnly = false }: O
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto p-6 [scrollbar-gutter:stable] @3xl/canvas:p-8">
+      {projectData.output_mode && projectData.output_mode !== "video" && (projectData.episodes?.length ?? 0) === 0 && <details className="mb-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">{t("book_legacy_drafts")}</summary><BookEpisodePanel project={projectName} episode={0} view="audio" legacyOnly /></details>}
       {showWelcome ? (
         <WelcomeCanvas
           projectTitle={projectData.title}

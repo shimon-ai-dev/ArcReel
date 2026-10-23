@@ -12,6 +12,7 @@ from typing import Annotated, Any, ClassVar, Literal, get_args
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, create_model, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
+from lib.book.models import Performance
 from lib.script.script_skeleton import resolve_declared_kind
 
 # 所有剧本模型默认禁止额外字段:Agent 的 `patch_episode_script` 通过 `_set_nested` 允许在
@@ -23,6 +24,62 @@ from lib.script.script_skeleton import resolve_declared_kind
 # ScriptGenerator 路径(LLM 输出走 model_validate + model_dump)也会被这层保护:LLM 在
 # Structured Outputs 下不太会产出额外字段,产出即 hallucination,拒比静默丢更安全。
 _STRICT_CONFIG = ConfigDict(extra="forbid")
+
+
+class BookPerformance(Performance):
+    # Google structured output does not support exclusiveMinimum; local validation
+    # still rejects zero, while the portable schema describes a nonnegative bound.
+    speed: float | None = Field(default=None, ge=0, le=4)
+
+    @model_validator(mode="after")
+    def positive_speed(self):
+        if self.speed is not None and self.speed <= 0:
+            raise ValueError("speed must be positive")
+        return self
+
+
+class BookSpeechAnnotation(BaseModel):
+    """Source-bound performance intent, never a claim of provider support."""
+
+    model_config = _STRICT_CONFIG
+    source_start: int = Field(ge=0)
+    source_end: int = Field(ge=1)
+    text: str = Field(min_length=1)
+    speaker_id: str = Field(default="narrator", min_length=1)
+    performance: BookPerformance = Field(default_factory=BookPerformance)
+    pause_after_seconds: float = Field(default=0, ge=0, le=30)
+
+
+class BookSoundCue(BaseModel):
+    model_config = _STRICT_CONFIG
+    cue_id: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    track: Literal["ambience", "sfx", "music"] = "ambience"
+    source_start: int = Field(ge=0)
+    source_end: int = Field(ge=1)
+
+
+class BookAnnotatedUnit(BaseModel):
+    book_speech: list[BookSpeechAnnotation] = Field(default_factory=list, exclude_if=lambda value: not value)
+    book_sound_cues: list[BookSoundCue] = Field(default_factory=list, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def validate_book_annotations(self):
+        source = getattr(self, "novel_text", getattr(self, "source_text", ""))
+        previous = 0
+        for speech in self.book_speech:
+            if (
+                speech.source_start < previous
+                or speech.source_end > len(source)
+                or source[speech.source_start : speech.source_end] != speech.text
+            ):
+                raise ValueError("book_speech must match ordered, non-overlapping local source spans exactly")
+            previous = speech.source_end
+        for cue in self.book_sound_cues:
+            if not cue.source_start < cue.source_end <= len(source):
+                raise ValueError("book_sound_cues must anchor within local source text")
+        return self
+
 
 # ============ 枚举类型定义 ============
 
@@ -247,7 +304,7 @@ def get_generated_assets(item: dict) -> dict:
 # ============ 旁白/解说（Narration） ============
 
 
-class NarrationSegment(BaseModel):
+class NarrationSegment(BookAnnotatedUnit):
     """旁白/解说的分镜
 
     注意：不设独立 `episode` 字段。集号已经编码在 `segment_id`（格式 E{集}S{序号}）中，
@@ -373,7 +430,7 @@ class PlanNewAsset(BaseModel):
     asset_name: str = Field(default="", description="register：登记名；derivative：衍生名；留空即取 name")
 
 
-class NarrationScriptPlanSegment(BaseModel):
+class NarrationScriptPlanSegment(BookAnnotatedUnit):
     """旁白/解说 script_plan（分镜拆分）产出的结构化分镜：内容层。
 
     只承载 script_plan 已定的内容字段：分镜边界（segment_id / segment_break）、逐字 novel_text、
@@ -481,7 +538,7 @@ class Utterance(BaseModel):
         return self
 
 
-class DramaScene(BaseModel):
+class DramaScene(BookAnnotatedUnit):
     """剧情演绎的分镜。"""
 
     model_config = _STRICT_CONFIG
@@ -609,7 +666,7 @@ class DramaEpisodeScript(BaseModel):
 # 写回正式脚本条目（ScriptGenerator._merge_visual_layer）。
 
 
-class DramaSceneContent(BaseModel):
+class DramaSceneContent(BookAnnotatedUnit):
     """script_plan（normalize）产出的分镜内容层：除视觉层（image_prompt / video_prompt）外的全部字段。
 
     作为 prompt_authoring 视觉生成、以及后续 web 审阅 / 编辑的结构化中间态契约（落盘于

@@ -15,14 +15,15 @@
 import { EPISODE_VIEW_EDIT, EPISODE_VIEW_PARAM } from "@/app-routes";
 import type { GenerationRoute } from "@/utils/generation-mode";
 
-export const EPISODE_VIEWS = ["setting", "plan", "grid", "board", EPISODE_VIEW_EDIT] as const;
+export const EPISODE_VIEWS = ["setting", "plan", "grid", "board", "audio", "listen", EPISODE_VIEW_EDIT] as const;
 export type EpisodeView = (typeof EPISODE_VIEWS)[number];
 /** 画布承担的视图；故事设定与剪辑视图替换整个画布。 */
-export type CanvasView = Exclude<EpisodeView, "setting" | "edit">;
+export type CanvasView = Exclude<EpisodeView, "setting" | "edit" | "audio" | "listen">;
 
 /** 决定集页有哪些视图的事实，由路由层按项目与这一集算出。 */
 export interface EpisodeViewFacts {
   isAd: boolean;
+  outputMode?: "video" | "audiobook" | "illustrated_audiobook";
   route: GenerationRoute;
   /** 分镜图生视频且开启了宫格分镜图。 */
   grid: boolean;
@@ -49,21 +50,26 @@ function planAvailable(facts: EpisodeViewFacts): boolean {
 /** 集页页头的视图 tab，按显示顺序排列。 */
 export function episodeViewTabs(facts: EpisodeViewFacts): EpisodeViewTab[] {
   const plan = planAvailable(facts);
+  const book = facts.outputMode === "audiobook" || facts.outputMode === "illustrated_audiobook";
   const tabs: EpisodeViewTab[] = [];
   if (facts.isAd) tabs.push({ view: "setting", disabled: false });
   if (plan) tabs.push({ view: "plan", disabled: false });
-  if (facts.grid) tabs.push({ view: "grid", disabled: facts.sourceReview });
+  if (facts.grid && !book) tabs.push({ view: "grid", disabled: facts.sourceReview });
   // 参考生视频的单元列表在中间稿阶段就可查看；分镜图生视频要等正式剧本。没有脚本规划时分镜是唯一视图。
   const boardEnabled =
     facts.hasScript || !plan || (facts.route === "reference_video" && !facts.sourceReview);
-  tabs.push({ view: "board", disabled: !boardEnabled });
-  if (facts.hasScript && !facts.demo) tabs.push({ view: EPISODE_VIEW_EDIT, disabled: false });
+  if (facts.outputMode !== "audiobook") tabs.push({ view: "board", disabled: !boardEnabled });
+  if (book) {
+    tabs.push({ view: "audio", disabled: !facts.hasScript });
+    tabs.push({ view: "listen", disabled: !facts.hasScript });
+  }
+  if (!book && facts.hasScript && !facts.demo) tabs.push({ view: EPISODE_VIEW_EDIT, disabled: false });
   return tabs;
 }
 
 export function defaultEpisodeView(facts: EpisodeViewFacts): EpisodeView {
-  if (facts.hasScript) return "board";
-  return planAvailable(facts) ? "plan" : "board";
+  if (facts.hasScript) return facts.outputMode === "audiobook" ? "audio" : "board";
+  return planAvailable(facts) ? "plan" : facts.outputMode === "audiobook" ? "audio" : "board";
 }
 
 /** 地址上的取值落到哪个视图：无效或不可选时按缺省视图。 */

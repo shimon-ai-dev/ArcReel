@@ -107,6 +107,8 @@ pnpm e2e:remote   # 终端二：构建前端，连接容器里的浏览器运行
 | `website/docs/index.mdx` | 文档站定位、主要入口和导航概览 | 具体功能的完整操作步骤 |
 | `website/docs/guide/getting-started.md` | 从部署到第一条成片的完整操作路径 | 生产级反向代理和备份策略 |
 | `website/docs/guide/book-modes.md` | 有声书与图声书制作、本地情绪 TTS、音频混音、同步播放与导出限制 | 模型权重安装教程与真实模型验收承诺 |
+| `website/docs/guide/voxcpm2.md` | VoxCPM2 官方接口适配、克隆模式、参考音频和能力边界 | 权重安装、服务自动部署或真实克隆效果承诺 |
+| `website/docs/guide/existing-library-bundles.md` | 现有资产库只读转换、索引方言、导入预览和安全限制 | 任意注册表推断、NAS 自动挂载或真实模型验收承诺 |
 | `website/docs/guide/workflows.md` | 创作类型、生成模式、内容确认节点、选择建议 | 供应商密钥和运维命令 |
 | `website/docs/guide/providers.md` | 供应商类型、覆盖能力、选择原则、配置层级 | 容易过期的价格承诺 |
 | `website/docs/guide/comfyui.md` | ComfyUI workflow 的导入、节点绑定、尺寸/时长/种子换算语义、测试与运行限制 | ComfyUI 自身的部署方式与自定义节点安装教程 |

@@ -102,7 +102,8 @@ export function StudioCanvasRouter() {
 
   // 演示态不发真实能力请求。demoMode 演示→真实切换时先于 store 变为 false，
   // currentProjectName 单独判一次兜住这一帧仍读到旧演示项目名的窗口。
-  const capabilitiesEnabled = !demoMode && !isDemoProject(currentProjectName);
+  const isBook = currentProjectData?.output_mode === "audiobook" || currentProjectData?.output_mode === "illustrated_audiobook";
+  const capabilitiesEnabled = Boolean(currentProjectData) && !isBook && !demoMode && !isDemoProject(currentProjectName);
 
   // 逐个分镜的时长编辑器候选取经联动约束收窄后的集合，用户就选不到入队后必然被拒的组合；
   // 已保存的越界值不改写，由 ShotDetail 按成因给警告并引导重选。
@@ -537,7 +538,7 @@ export function StudioCanvasRouter() {
               renderCanvas={({ view, onViewChange }) => (
                 // 懒加载画布的 chunk 未到达或加载失败时只在画布区域显示占位，页头与视图切换保持可见
                 <LazyBoundary variant="pane">
-                  {route === "reference_video" ? (
+                  {!isBook && route === "reference_video" ? (
                     <ReferenceVideoCanvas
                       // 同一 epNum 跨项目不 remount 会让 optimisticUnitIds / prevTaskStatusRef
                       // 残留上个项目的状态（例如 "E1U1" 长驻 set 里），切到同名 unit 的新项目
@@ -551,10 +552,10 @@ export function StudioCanvasRouter() {
                       hasScript={Boolean(script)}
                       showPreprocess={!isAd}
                       freeDuration={isAd}
-                      videoModelUnresolved={capabilities.videoModelUnresolved}
+                      videoModelUnresolved={isBook ? false : capabilities.videoModelUnresolved}
                       planDurationOptions={planDurationOptions}
                     />
-                  ) : gridStoryboardEnabled(currentProjectData) ? (
+                  ) : !isBook && gridStoryboardEnabled(currentProjectData) ? (
                     <GridImageToVideoCanvas
                       key={`${currentProjectName}::${epNum}`}
                       projectName={currentProjectName}
@@ -569,12 +570,12 @@ export function StudioCanvasRouter() {
                       planDurationOptions={planDurationOptions}
                       durationWarningReason={durationWarningReason}
                       durationEndpointFixed={durationEndpointFixed}
-                      videoModelUnresolved={capabilities.videoModelUnresolved}
+                      videoModelUnresolved={isBook ? false : capabilities.videoModelUnresolved}
                       lastFrame={capabilities.lastFrame}
                       capabilitiesLoading={capabilities.loading}
                       onUpdatePrompt={handleUpdatePrompt}
                       onGenerateStoryboard={voidPromise(handleGenerateStoryboard)}
-                      onGenerateVideo={handleGenerateVideo}
+                      onGenerateVideo={isBook ? undefined : handleGenerateVideo}
                       onGenerateNarration={narrationGenerationEnabled ? voidPromise(handleGenerateNarration) : undefined}
                       onGenerateEpisodeNarration={narrationGenerationEnabled ? voidPromise(handleGenerateEpisodeNarration) : undefined}
                       onGenerateGrid={handleGenerateGrid}
@@ -602,7 +603,7 @@ export function StudioCanvasRouter() {
                       planDurationOptions={planDurationOptions}
                       durationWarningReason={durationWarningReason}
                       durationEndpointFixed={durationEndpointFixed}
-                      videoModelUnresolved={capabilities.videoModelUnresolved}
+                      videoModelUnresolved={isBook ? false : capabilities.videoModelUnresolved}
                       lastFrame={capabilities.lastFrame}
                       capabilitiesLoading={capabilities.loading}
                       onUpdatePrompt={handleUpdatePrompt}
@@ -610,7 +611,7 @@ export function StudioCanvasRouter() {
                       onInsertShot={handleInsertShot}
                       onRemoveShot={handleRemoveShot}
                       onGenerateStoryboard={voidPromise(handleGenerateStoryboard)}
-                      onGenerateVideo={handleGenerateVideo}
+                      onGenerateVideo={isBook ? undefined : handleGenerateVideo}
                       onGenerateNarration={narrationGenerationEnabled ? voidPromise(handleGenerateNarration) : undefined}
                       onGenerateEpisodeNarration={narrationGenerationEnabled ? voidPromise(handleGenerateEpisodeNarration) : undefined}
                       onRestoreStoryboard={handleRestoreAsset}

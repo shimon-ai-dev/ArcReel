@@ -19,6 +19,7 @@ from server.services.book.service import (
     import_source,
     save_document,
     snapshot,
+    sync_episode,
 )
 from server.tool_runtime import CallerContext, ProjectScope, Services, ToolOutcome, ToolProblem, ToolRequest
 
@@ -26,9 +27,10 @@ from server.tool_runtime import CallerContext, ProjectScope, Services, ToolOutco
 class BookRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["status", "import_source", "save_document", "edit_segment", "generate", "keyframe", "export"] = (
-        Field(description="书籍操作：读取状态、导入完整原文、保存编辑、生成语音、生成关键帧或导出")
-    )
+    action: Literal[
+        "status", "sync_episode", "import_source", "save_document", "edit_segment", "generate", "keyframe", "export"
+    ] = Field(description="书籍操作：读取状态、导入完整原文、保存编辑、生成语音、生成关键帧或导出")
+    episode: int | None = Field(default=None, gt=0, description="原工作流章节编号")
     text: str | None = Field(default=None, max_length=5_000_000, description="import_source 的完整原始文本，不得摘要")
     title: str = Field(default="", description="导入书籍的标题")
     document: BookDocument | None = Field(default=None, description="status 返回的完整书籍文档；保留 revision 乐观锁")
@@ -40,6 +42,8 @@ class BookRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_action(self) -> BookRequest:
+        if self.action == "sync_episode" and self.episode is None:
+            raise ValueError("sync_episode requires episode")
         if self.action == "import_source" and (self.text is None or not self.text.strip()):
             raise ValueError("import_source requires complete source text")
         if self.action == "save_document" and self.document is None:
@@ -57,6 +61,10 @@ async def book_project(
     value = request.value
     try:
         if value.action == "status":
+            result = await asyncio.to_thread(snapshot, scope.project_name, projects=services.projects)
+        elif value.action == "sync_episode":
+            assert value.episode is not None
+            await run_sync_transaction(sync_episode, scope.project_name, value.episode, projects=services.projects)
             result = await asyncio.to_thread(snapshot, scope.project_name, projects=services.projects)
         elif value.action == "import_source":
             document = await run_sync_transaction(
@@ -106,7 +114,7 @@ async def book_project(
     except BookConflictError as exc:
         return ToolOutcome(problem=ToolProblem("book_revision_conflict", str(exc), action="reload_book"))
     except FileNotFoundError as exc:
-        return ToolOutcome(problem=ToolProblem("book_not_found", str(exc), action="import_source"))
+        return ToolOutcome(problem=ToolProblem("book_not_found", str(exc), action="sync_episode"))
     except ValueError as exc:
         return ToolOutcome(problem=ToolProblem("invalid_book_request", str(exc), action="fix_input"))
 
@@ -115,11 +123,11 @@ BOOK_PROJECT = ToolDeclaration(
     name="book_project",
     description=(
         "有声书/图声书的统一制作工具。先 action=status 读取完整文档、真实能力、覆盖检查、时间线与完成状态。"
-        "import_source 保存全文并保真分章分段，不得摘要、删掉‘他说’或改变原文顺序。save_document 修改说话人、"
+        "使用原章节来源、拆解和分镜流程后，通过 sync_episode 同步指定 episode 的原文、语音表演注释及现有分镜图。import_source 仅用于旧版兼容。save_document 修改说话人、"
         "持久声音配置、独立情绪/风格/停顿/发音映射、音效轨及关键帧锚点，须原样保留当前 revision；不能伪造音频产物。"
-        "原文修改用 import_source。配置模型前核对 capabilities；不支持的控制明确报告，不静默丢弃。"
+        "原文和分镜图修改使用原章节工作流，然后 sync_episode。配置模型前核对 capabilities；不支持的控制明确报告，不静默丢弃。"
         "generate 按稳定段 ID 入持久队列，缺省只生成缺失或过期段，失败可重试，返回 task_ids 不是生成成功。"
-        "keyframe 仅图声书可用，复用已配置图像 Provider（含 ComfyUI），不调用视频模型。"
+        "图声书直接使用原分镜图生成工具和参考资产，不另建关键帧管线。keyframe 仅旧版兼容。"
         "export 生成章节/整本 WAV 或 MP3、manifest 与 HTML 包，正文覆盖和必需媒体缺失会阻止完成。"
         "时间线按实际语音时长与明确静音重算，图片和音效始终绑定语音段。"
         "书籍模式不使用视频任务、视频时长档或视频完成条件；文本覆盖通过不代表听感质量已验收。"

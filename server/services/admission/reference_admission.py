@@ -59,7 +59,9 @@ def input_refusal_error(refused: InputRefused) -> BadRequestError:
     return BadRequestError(first.code, **params)
 
 
-def require_admitted_storyboard_references(project: dict, items: Iterable[object]) -> None:
+def require_admitted_storyboard_references(
+    project: dict, items: Iterable[object], *, allow_reference_views: bool = False
+) -> None:
     """分镜路线生成入口预检：引用未登记、或角色 / 场景 / 道具没有资产图即拒绝。
 
     分镜图、宫格图与图生视频的单条提交共用本函数，参考生视频的同一判定在
@@ -71,7 +73,9 @@ def require_admitted_storyboard_references(project: dict, items: Iterable[object
     合成一句提示指不出该做哪件事。传入多条时一次报全缺口，用户不必逐次提交才看全。
     """
 
-    admission = admit_storyboard_items(build_reference_catalog(project), items)
+    admission = admit_storyboard_items(
+        build_reference_catalog(project), items, allow_reference_views=allow_reference_views
+    )
     if admission.unregistered:
         raise BadRequestError(UNREGISTERED_REFERENCE_CODE, missing_text=admission.unregistered_text())
     if admission.without_sheet:

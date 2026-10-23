@@ -9,7 +9,7 @@ description: 为旁白/解说剧本逐分镜生成旁白配音（TTS）。当 TT
 写回该分镜的 `generated_assets.narration_audio`（输出 `audio/segment_{segment_id}.wav`）。
 只依赖剧本，不依赖分镜图/视频——剧本生成后即可推进。
 
-书籍模式优先分流：output_mode 为 audiobook 或 illustrated_audiobook 时改用 book-production skill 与 book_project 工具；本 skill 的视频模型、分镜及视频旁白流程不适用。
+audiobook 和 illustrated_audiobook 不执行本 skill 的视频或旧视频旁白生成；语音改用 book-production。原章节和图声书分镜图流程仍保留。
 
 ## 工具调用
 

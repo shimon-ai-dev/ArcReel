@@ -37,6 +37,8 @@ class VoiceProfile(BookModel):
     voice: str = ""
     reference_audio: str | None = None
     reference_audio_digest: str | None = None
+    reference_text: str | None = None
+    source_character: str | None = None
     language: str = "zh"
     settings: dict[str, str | float | int | bool] = Field(default_factory=dict)
 
@@ -65,6 +67,7 @@ class AudioVersion(BookModel):
 
 
 class SpeechSegment(BookModel):
+    unit_id: str | None = None
     id: str = Field(min_length=1)
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
@@ -88,6 +91,8 @@ class SpeechSegment(BookModel):
 
 
 class BookChapter(BookModel):
+    episode: int | None = Field(default=None, gt=0)
+    workflow_digest: str | None = None
     id: str = Field(min_length=1)
     title: str
     segments: list[SpeechSegment] = Field(default_factory=list)
@@ -132,6 +137,7 @@ class ImageVersion(BookModel):
 
 
 class Keyframe(BookModel):
+    storyboard_id: str | None = None
     versions: list[ImageVersion] = Field(default_factory=list)
     id: str = Field(min_length=1)
     segment_id: str = Field(min_length=1)
@@ -156,7 +162,21 @@ class Keyframe(BookModel):
         return [validate_resource_path(path) for path in value]
 
 
+class SoundCue(BookModel):
+    """Source-linked sound intention, deliberately not a generated media artifact."""
+
+    id: str
+    episode: int = Field(gt=0)
+    unit_id: str
+    segment_id: str
+    end_segment_id: str
+    description: str
+    track: Literal["ambience", "sfx", "music"] = "ambience"
+
+
 class BookDocument(BookModel):
+    origin: Literal["legacy", "episodes"] = "legacy"
+    legacy_archive: str | None = None
     schema_version: Literal[1] = 1
     revision: int = Field(default=0, ge=0)
     title: str = ""
@@ -164,6 +184,7 @@ class BookDocument(BookModel):
     normalized_text: str
     chapters: list[BookChapter] = Field(default_factory=list)
     voices: dict[str, VoiceProfile] = Field(default_factory=dict)
+    sound_cues: list[SoundCue] = Field(default_factory=list)
     effects: list[SoundEffect] = Field(default_factory=list)
     keyframes: list[Keyframe] = Field(default_factory=list)
 

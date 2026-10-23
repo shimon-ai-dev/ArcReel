@@ -14,11 +14,11 @@ const STEP_LABEL_KEYS: Record<WizardStep, string> = {
 const STEPS: readonly WizardStep[] = [1, 2, 3];
 
 /** 横向步骤条：当前步骤高亮，已完成的步骤显示对勾。只做指示，不可点击跳转。 */
-export function WizardStepper({ current }: { current: WizardStep }) {
+export function WizardStepper({ current, includeStyle = true }: { current: WizardStep; includeStyle?: boolean }) {
   const { t } = useTranslation(["dashboard", "templates"]);
   return (
     <ol aria-label={t("dashboard:wizard_steps_label")} className="flex items-center gap-2">
-      {STEPS.map((step) => {
+      {STEPS.filter(step => includeStyle || step !== 3).map((step) => {
         const done = step < current;
         const active = step === current;
         return (

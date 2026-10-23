@@ -89,6 +89,7 @@ _ABSENT_REVISION = "sha256-v1:" + "0" * 64
 
 # 每条声明一份合法入参；新增声明须在此登记，否则参数化用例以 KeyError 失败。
 SAMPLE_ARGUMENTS: dict[str, dict[str, Any]] = {
+    "book_project": {"action": "status"},
     "list_projects": {},
     "create_project": {"name": "fresh", "title": "Fresh"},
     "upload_source": {"filename": "novel.txt", "content": "第一章\n你好", "on_conflict": "replace"},
@@ -530,6 +531,7 @@ _TIME_DEPENDENT_RESULTS = frozenset({CREATE_PROJECT.name, CREATE_TIMELINE.name})
 # 样例入参下合法地返回 problem 的声明：测试项目缺少它们要找的对象或能力配置。其余声明在样例入参下必须成功。
 _PROBLEM_ON_SAMPLE = frozenset(
     {
+        "book_project",
         GET_VIDEO_CAPABILITIES.name,
         GET_PROMPT_PREVIEW.name,
         GET_GENERATION_BATCH.name,

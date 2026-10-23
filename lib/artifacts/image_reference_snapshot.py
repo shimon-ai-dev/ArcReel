@@ -10,7 +10,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from lib.artifacts.visual_artifact_provenance import VisualReference, visual_file_digest
@@ -80,16 +80,7 @@ def freeze_image_references(
             content_digest = visual_file_digest(target)
             if content_digest != source_digest:
                 raise OSError("reference images changed while they were frozen")
-            frozen_visuals.append(
-                VisualReference(
-                    path=target,
-                    role=visual.role,
-                    logical_type=visual.logical_type,
-                    logical_id=visual.logical_id,
-                    kind=visual.kind,
-                    content_digest=content_digest,
-                )
-            )
+            frozen_visuals.append(replace(visual, path=target, content_digest=content_digest))
         for _reference, _visual, source, resolved, source_digest in sources:
             if source.resolve(strict=True) != resolved or visual_file_digest(source) != source_digest:
                 raise OSError("reference images changed while they were frozen")

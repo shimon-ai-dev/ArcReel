@@ -272,6 +272,23 @@ async function columnCount(page: Page) {
 
 defineRegionScenarios("资产画廊", [
   {
+    name: "外部库导入说明与确认按钮在矮窗口仍可达",
+    path: PATH,
+    api: MANY_API,
+    ready: async (page) => {
+      await expect(cards(page)).toHaveCount(40);
+    },
+    act: async (page) => {
+      await clearAgentOverlay(page);
+      await page.getByRole("button", { name: "导入 / 更新外部库" }).click();
+      const dialog = page.getByRole("dialog", { name: "从本地资产库导入 / 更新" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "确认应用" })).toBeDisabled();
+      await expect(dialog.getByRole("button", { name: "取消" })).toBeInViewport({ ratio: 1 });
+      await expect(dialog.getByText(/prepare_library_bundle/)).toBeAttached();
+    },
+  },
+  {
     name: "浏览卡网格按画布宽度加列，状态标记在图片左上角",
     path: PATH,
     api: BASE,

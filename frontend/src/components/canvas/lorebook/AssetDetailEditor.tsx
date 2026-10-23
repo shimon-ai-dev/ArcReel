@@ -32,6 +32,7 @@ import {
 } from "./asset-editor-model";
 import { CharacterDerivativesField } from "./CharacterDerivativesField";
 import { CharacterVoiceField } from "./CharacterVoiceField";
+import { ExternalLibraryMetadata } from "./ExternalLibraryMetadata";
 import { EditableAssetName } from "./EditableAssetName";
 import { markerOf, toGalleryAsset, type GalleryAssetSource } from "./gallery-model";
 import { GalleryStatusMarker } from "./GalleryStatusMarker";
@@ -259,6 +260,13 @@ export function AssetDetailEditor({
               </div>
             )}
           </section>
+
+          <ExternalLibraryMetadata
+            projectName={projectName}
+            identity={"external_library" in asset ? asset.external_library : undefined}
+            views={"reference_views" in asset ? asset.reference_views : undefined}
+            voice={character?.external_voice}
+          />
 
           {readOnly && originals.length === 0
             ? null

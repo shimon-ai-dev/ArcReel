@@ -32,6 +32,7 @@ import {
   type EpisodeView,
   type EpisodeViewFacts,
 } from "./episode-view";
+import { BookEpisodePanel } from "@/components/book/BookEpisodePanel";
 import { EpisodeHead } from "./EpisodeHead";
 import { EpisodeHeaderActions, EpisodeHeaderSlotProvider } from "./EpisodeHeaderActions";
 import { EpisodePageHeader, episodeViewTabId } from "./EpisodePageHeader";
@@ -114,9 +115,10 @@ function EpisodePageContent({
   const hasDraft = hasEpisodeDraft(meta);
   const grid = gridStoryboardEnabled(projectData);
   const sourceReview = showsEpisodeSource(projectData, episode, script, demo);
+  const outputMode = projectData?.output_mode ?? "video";
   const facts = useMemo<EpisodeViewFacts>(
-    () => ({ isAd, route, grid, hasScript, hasDraft, sourceReview, demo }),
-    [isAd, route, grid, hasScript, hasDraft, sourceReview, demo],
+    () => ({ isAd, route, grid, hasScript, hasDraft, sourceReview, demo, outputMode }),
+    [isAd, route, grid, hasScript, hasDraft, sourceReview, demo, outputMode],
   );
   const tabs = useMemo(() => episodeViewTabs(facts), [facts]);
   const view = resolveEpisodeView(searchParams.get(EPISODE_VIEW_PARAM), facts);
@@ -163,7 +165,9 @@ function EpisodePageContent({
 
   const ttsNarration = projectData?.narration_delivery === "use_tts";
   let body: ReactNode;
-  if (view === "edit") {
+  if (view === "audio" || view === "listen") {
+    body = <BookEpisodePanel key={`${projectName}:${episode}`} project={projectName} episode={episode} view={view} />;
+  } else if (view === "edit") {
     body = (
       <LazyBoundary variant="pane">
         <EditTimelineView

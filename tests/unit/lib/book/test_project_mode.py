@@ -65,3 +65,16 @@ def test_missing_output_mode_defaults_without_mutating_legacy_mapping():
     legacy = {"content_mode": "drama", "generation_mode": "storyboard"}
     assert project_output_mode(legacy) == "video"
     assert "output_mode" not in legacy
+
+
+def test_legacy_project_reads_and_saves_do_not_inject_default_into_snapshots(tmp_path):
+    manager = ProjectManager(tmp_path / "projects")
+    directory = manager.projects_dir / "legacy"
+    directory.mkdir(parents=True)
+    legacy = {"title": "Legacy", "content_mode": "narration", "generation_mode": "storyboard"}
+    atomic_write_json(directory / "project.json", legacy)
+    loaded = manager.load_project("legacy")
+    assert loaded == legacy
+    assert project_output_mode(loaded) == "video"
+    manager.save_project("legacy", loaded)
+    assert "output_mode" not in manager.load_project("legacy")

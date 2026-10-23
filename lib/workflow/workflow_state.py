@@ -18,7 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from lib.artifacts.artifact_activation import ArtifactComparer, ArtifactCurrencyResolver, RegisteredArtifactResolver
 from lib.artifacts.artifact_manifest import ArtifactKey, ArtifactManifestError, ArtifactStatus
-from lib.book.domain import all_segments, book_fingerprint, build_timeline
+from lib.book.domain import all_segments, book_fingerprint
+from lib.book.episode_bridge import stale_episodes
 from lib.book.status import book_status
 from lib.book.store import BookStore
 from lib.edit_timeline.errors import EditTimelineError
@@ -52,6 +53,7 @@ from lib.project.project_migration_failure import (
 )
 from lib.project.project_migration_report import MigrationReport, visible_migration_report
 from lib.project.source_revision import SourceRevisionResult, SourceScope, compute_source_revision
+from lib.references.multiview_references import confirmed_reference_views
 from lib.references.reference_admission import admit_references, admit_storyboard_items
 from lib.references.reference_catalog import build_reference_catalog
 from lib.script import script_review
@@ -66,6 +68,7 @@ from lib.script.script_models import get_generated_assets, script_duration_total
 from lib.script.script_skeleton import SKELETONS, STORYBOARD_ITEM_ID_PATTERN, ensure_route_skeleton, resolve_kind_items
 from lib.speech.narration_config import USE_TTS, project_narration_delivery
 from lib.workflow.operation_admission import (
+    NOT_APPLICABLE,
     AdmissionReason,
     AdmissionState,
     OperationAdmission,
@@ -829,8 +832,6 @@ class WorkflowStateService:
         failure = load_migration_verdict(project_path)
         if failure is not None:
             return self._migration_blocked_status(project, failure)
-        if is_book_project(project):
-            return self._book_status(project_name, project, episode)
         shared = self._shared_facts(project_path, project)
         status = self._get_status(project_name, project, project_path, episode, shared)
         status.migration_report = visible_migration_report(project_path)
@@ -852,19 +853,6 @@ class WorkflowStateService:
             return []
         if not isinstance(project, dict) or load_migration_verdict(project_path) is not None:
             return []
-        if is_book_project(project):
-            try:
-                book = BookStore(self.pm, project_name).load()
-            except (OSError, ValueError):
-                return []
-            return [
-                EpisodeNextStep(
-                    episode=index,
-                    plan_stale=False,
-                    next_action=self._book_status(project_name, project, index).next_action,
-                )
-                for index, _chapter in enumerate(book.chapters, 1)
-            ]
         shared = self._shared_facts(project_path, project)
         if shared.blockers:
             return []
@@ -902,8 +890,6 @@ class WorkflowStateService:
         failure = load_migration_verdict(project_path)
         if failure is not None:
             return self._migration_blocked_summary(project, self._episodes(project, []), failure)
-        if is_book_project(project):
-            return self._book_summary(project_name, project)
         episodes = self._episodes(project, [])
         try:
             resolver: ArtifactComparer | None = (
@@ -945,7 +931,7 @@ class WorkflowStateService:
             grid_storyboard=False,
             output_mode=mode,
         )
-        args: dict[str, Any] = {"tool": "book_project", "action": "import_source"}
+        args: dict[str, Any] = {"tool": "book_project", "action": "sync_episode", "episode": episode}
         try:
             book = BookStore(self.pm, project_name).load()
         except (OSError, ValueError) as exc:
@@ -963,12 +949,43 @@ class WorkflowStateService:
                 ),
                 gates={},
                 artifacts={},
-                next_action=_action(WorkflowActionType.FIX_INPUT, "import book source", args=args),
+                next_action=_action(
+                    WorkflowActionType.FIX_INPUT, "synchronize the existing episode source and storyboard", args=args
+                ),
             )
-        if episode is not None and not 1 <= episode <= len(book.chapters):
-            raise WorkflowRequestError("Book chapter number is out of range")
+        chapter = next((chapter for chapter in book.chapters if chapter.episode == episode), None)
+        if episode is not None and chapter is None:
+            return WorkflowStatus(
+                project_revision=_project_revision(project),
+                source_revision=book_fingerprint(book),
+                project=base,
+                target=None,
+                blockers=[],
+                content=None,
+                gates={},
+                artifacts={},
+                next_action=_action(WorkflowActionType.FIX_INPUT, "synchronize existing episode audio", args=args),
+            )
+        stale = stale_episodes(self.pm, project_name, book)
+        if stale:
+            sync_episode = episode if episode in stale else stale[0]
+            return WorkflowStatus(
+                project_revision=_project_revision(project),
+                source_revision=book_fingerprint(book),
+                project=base,
+                target=None,
+                blockers=[],
+                content=None,
+                gates={"book": {"stale_episodes": stale}},
+                artifacts={"book": {"complete": False, "stale_episodes": stale}},
+                next_action=_action(
+                    WorkflowActionType.FIX_INPUT,
+                    "original chapters or assets changed; synchronize before audio/export",
+                    args={"tool": "book_project", "action": "sync_episode", "episode": sync_episode},
+                ),
+            )
         state = book_status(book, self.pm.get_project_path(project_name), illustrated=mode == "illustrated_audiobook")
-        segments = book.chapters[episode - 1].segments if episode is not None else all_segments(book)
+        segments = chapter.segments if chapter is not None else all_segments(book)
         waiting = any(segment.status in {"queued", "running"} for segment in segments)
         complete = bool(state["complete"])
         action_type = WorkflowActionType.FIX_INPUT
@@ -986,7 +1003,8 @@ class WorkflowStateService:
                 reason = "configure persistent book voices"
         elif state["missing_images"]:
             args["action"] = "status"
-            reason = "generate anchored book keyframes"
+            reason = "synchronize generated storyboard images into the audio program"
+            args["action"] = "sync_episode"
         elif state["missing_effects"]:
             args["action"] = "save_document"
             reason = "replace missing book sound assets"
@@ -1010,53 +1028,6 @@ class WorkflowStateService:
             gates={"book": state},
             artifacts={"book": state},
             next_action=_action(action_type, reason, args=args),
-        )
-
-    def _book_summary(self, project_name: str, project: dict[str, Any]) -> ProjectSummary:
-        assets = {asset_type: ArtifactCount.zero() for asset_type in ASSET_SPECS}
-        try:
-            book = BookStore(self.pm, project_name).load()
-            state = book_status(
-                book,
-                self.pm.get_project_path(project_name),
-                illustrated=project_output_mode(project) == "illustrated_audiobook",
-            )
-            timeline = build_timeline(book)
-        except (OSError, ValueError) as exc:
-            return ProjectSummary(
-                needs_repair=not isinstance(exc, FileNotFoundError),
-                repair_reason=None if isinstance(exc, FileNotFoundError) else str(exc),
-                assets=assets,
-                episodes_summary=EpisodesSummary(total=0, scripted=0, in_production=0, completed=0),
-                episodes=[],
-                source_remaining=False,
-            )
-        episodes = []
-        for number, chapter in enumerate(book.chapters, 1):
-            duration = sum(
-                segment.duration_seconds + segment.pause_after_seconds
-                for segment in timeline.segments
-                if segment.chapter_id == chapter.id
-            )
-            status: EpisodeProductionStatus = "completed" if state["complete"] else "in_production"
-            episodes.append(
-                EpisodeSummary(
-                    episode=number,
-                    script_status="generated",
-                    status=status,
-                    item_count=len(chapter.segments),
-                    duration_seconds=round(duration),
-                    storyboards=ArtifactCount.zero(),
-                    videos=ArtifactCount.zero(),
-                )
-            )
-        return ProjectSummary(
-            needs_repair=False,
-            repair_reason=None,
-            assets=assets,
-            episodes_summary=_episodes_summary(episodes),
-            episodes=episodes,
-            source_remaining=False,
         )
 
     def _asset_counts(
@@ -1128,6 +1099,23 @@ class WorkflowStateService:
             ),
             total=len(items),
         )
+        if is_book_project(project):
+            audio = self._book_status(project_name, project, number)
+            return EpisodeSummary(
+                episode=number,
+                script_status=script_status,
+                status="completed"
+                if audio.artifacts.get("book", {}).get("complete")
+                else "in_production"
+                if script_status == "generated"
+                else "draft",
+                item_count=len(items),
+                duration_seconds=0,
+                storyboards=storyboards
+                if project_output_mode(project) == "illustrated_audiobook"
+                else ArtifactCount.zero(),
+                videos=ArtifactCount.zero(),
+            )
         return EpisodeSummary(
             episode=number,
             script_status=script_status,
@@ -1609,7 +1597,12 @@ class WorkflowStateService:
         """本集条目的引用准入，与生成入口同一判定（ADR 0073）：正文单元从正文派生，分镜条目读引用字段。"""
         catalog = build_reference_catalog(project)
         if kind != "video_units":
-            return admit_storyboard_items(catalog, items)
+            return admit_storyboard_items(
+                catalog,
+                items,
+                allow_reference_views=project.get("generation_mode") == "storyboard"
+                and project.get("grid_storyboard") is not True,
+            )
         references: list[tuple[str, str]] = []
         unregistered: list[str] = []
         for item in items:
@@ -1648,6 +1641,12 @@ class WorkflowStateService:
                 if asset.owner is not None
                 else owner
             )
+            if kind != "video_units" and project.get("grid_storyboard") is not True:
+                views = confirmed_reference_views(entry)
+                if views and (asset.asset_type != "character" or any(view.role == "identity" for view in views)):
+                    # Imported approved originals are the image-generation inputs themselves.
+                    # Do not ask the user to regenerate a sheet and lose their identity anchors.
+                    continue
             description = entry.get("description")
             if not isinstance(description, str) or not description.strip():
                 without_description.append(asset.name)
@@ -1697,6 +1696,8 @@ class WorkflowStateService:
         is_ad = mode == "ad"
         generation_mode = project.get("generation_mode")
         grid = project.get("grid_storyboard") is True and generation_mode == "storyboard"
+        book_mode = is_book_project(project)
+        audio_only = project_output_mode(project) == "audiobook"
         issues = list(shared.issues)
         artifacts = self._base_artifacts(project, shared)
         gates: dict[str, dict[str, Any]] = {
@@ -1781,7 +1782,7 @@ class WorkflowStateService:
         missing_sheets: list[str] = []
         if formal_present:
             content.script_item_count = len(items)
-            pending_ids = pending_authoring_entry_ids(items, kind)
+            pending_ids = [] if audio_only else pending_authoring_entry_ids(items, kind)
             id_field = SKELETONS[kind].id_field if kind in SKELETONS else None
             replan_ids = [
                 str(item.get(id_field))
@@ -1805,17 +1806,21 @@ class WorkflowStateService:
                     resolver=shared.currency,
                     issues=issues,
                 )
-                if generation_mode == "storyboard"
+                if generation_mode == "storyboard" and not audio_only
                 else _not_applicable_collection()
             )
-            artifacts["videos"] = self._media_collection(
-                project_path,
-                items,
-                kind,
-                "video_clip",
-                episode=number,
-                resolver=shared.currency,
-                issues=issues,
+            artifacts["videos"] = (
+                _not_applicable_collection()
+                if book_mode
+                else self._media_collection(
+                    project_path,
+                    items,
+                    kind,
+                    "video_clip",
+                    episode=number,
+                    resolver=shared.currency,
+                    issues=issues,
+                )
             )
             # 旁白配音只作为信息报告，不参与下一步：缺 TTS 不拦剪辑，补 TTS 由用户显式发起（见
             # generate_narration_audio）；后期配音项目不需要 TTS，不报缺口。读不出的配音状态只落在集合的
@@ -1842,10 +1847,16 @@ class WorkflowStateService:
         content.pending_authoring_ids = pending_ids
         content.needs_replan_ids = replan_ids
         # 剪辑时间线只陈述这一类内容：视频是否齐全不影响列出已有的几条。
-        timeline_ids = self._edit_timeline_ids(project_name, number, artifacts, issues) if formal_present else []
+        timeline_ids = (
+            self._edit_timeline_ids(project_name, number, artifacts, issues) if formal_present and not book_mode else []
+        )
         videos = artifacts["videos"]
-        operations[WorkflowActionType.CREATE_EDIT_TIMELINE] = admit_edit_timeline(
-            available_videos=len(videos.get("current_ids", [])) + len(videos.get("stale_ids", []))
+        operations[WorkflowActionType.CREATE_EDIT_TIMELINE] = (
+            NOT_APPLICABLE
+            if book_mode
+            else admit_edit_timeline(
+                available_videos=len(videos.get("current_ids", [])) + len(videos.get("stale_ids", []))
+            )
         )
         content.episode_complete = (
             formal_present
@@ -1972,7 +1983,7 @@ class WorkflowStateService:
                     ids=replan_ids,
                 ),
             )
-        if missing_sheets:
+        if missing_sheets and not audio_only:
             return respond(
                 target,
                 _action(
@@ -1984,7 +1995,7 @@ class WorkflowStateService:
             )
         if artifacts["storyboards"].get("state") == "blocked" or artifacts["videos"].get("state") == "blocked":
             return respond(target, _action(WorkflowActionType.NONE, "media artifact currency is blocked"))
-        if generation_mode == "storyboard" and artifacts["storyboards"]["missing_ids"]:
+        if generation_mode == "storyboard" and not audio_only and artifacts["storyboards"]["missing_ids"]:
             return respond(
                 target,
                 _action(
@@ -1994,6 +2005,12 @@ class WorkflowStateService:
                     ids=artifacts["storyboards"]["missing_ids"],
                 ),
             )
+        if book_mode:
+            audio_status = self._book_status(project_name, project, number)
+            artifacts["book"] = audio_status.artifacts.get("book", {})
+            gates["book"] = audio_status.gates.get("book", {})
+            content.episode_complete = bool(artifacts["book"].get("complete"))
+            return respond(target, audio_status.next_action)
         if artifacts["videos"]["missing_ids"]:
             return respond(
                 target,
@@ -2035,6 +2052,7 @@ class WorkflowStateService:
                 content_mode=str(project.get("content_mode")),
                 generation_mode=str(project.get("generation_mode")),
                 grid_storyboard=project.get("grid_storyboard") is True,
+                output_mode=project_output_mode(project),
             ),
             target=target,
             blockers=list(shared.blockers),
@@ -2067,6 +2085,7 @@ class WorkflowStateService:
                 content_mode=str(project.get("content_mode")),
                 generation_mode=str(project.get("generation_mode")),
                 grid_storyboard=project.get("grid_storyboard") is True,
+                output_mode=project_output_mode(project),
             ),
             target=None,
             blockers=[migration_blocker(failure)],

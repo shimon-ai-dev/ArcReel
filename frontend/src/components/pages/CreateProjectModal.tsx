@@ -9,7 +9,6 @@ import { DEFAULT_TEMPLATE_ID } from "@/data/style-templates";
 import { errMsg, voidCall, voidPromise } from "@/utils/async";
 import { formatNameList } from "@/utils/list-format";
 import { catalogDisplayNames, catalogDurations } from "@/utils/provider-models";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BookSelect } from "@/components/book/BookSelect";
 import { Button } from "@/components/ui/button";
@@ -200,9 +199,7 @@ export function CreateProjectModal() {
   // 当前步骤还缺的必填项与需要修正的字段，按界面上的顺序列出
   const missing: string[] = [];
   const invalid: string[] = [];
-  if (isBook) {
-    if (!basics.title.trim()) missing.push(t("project_title"));
-  } else if (step === 1) {
+  if (step === 1) {
     if (!basics.title.trim()) missing.push(t("project_title"));
     if (!basics.contentMode) missing.push(t("content_mode"));
     if (!basics.generationRoute) missing.push(t("generation_route"));
@@ -212,11 +209,11 @@ export function CreateProjectModal() {
       invalid.push(t("wizard_item_episode_target_duration"));
     }
     if (!isValidSpeechRate(duration.speechRate)) invalid.push(t("wizard_item_speech_rate"));
-    const narrationProblem = narrationDeliveryProblem(narration);
+    const narrationProblem = isBook ? null : narrationDeliveryProblem(narration);
     if (narrationProblem === "model") missing.push(t("project_tts_model_label"));
     if (narrationProblem === "voice") missing.push(t("narration_voice_label"));
   }
-  const generationLoading = !isBook && step === 2 && !generationData && !generationError;
+  const generationLoading = step === 2 && !generationData && !generationError;
   const blocked = missing.length > 0 || invalid.length > 0 || generationLoading;
   const hint =
     missing.length > 0
@@ -232,19 +229,6 @@ export function CreateProjectModal() {
   };
 
   const handleCreate = async () => {
-    if (isBook) {
-      if (!basics.title.trim()) return;
-      setCreating(true);
-      try {
-        const result = await API.createProject({ title: basics.title.trim(), output_mode: outputMode });
-        setShowCreateModal(false);
-        navigate(`/app/projects/${result.name}`);
-      } catch (error) {
-        useAppStore.getState().pushToast(t("create_project_failed", { message: errMsg(error) }), "error");
-        setCreating(false);
-      }
-      return;
-    }
     const { contentMode, generationRoute } = basics;
     if (!contentMode || !generationRoute) return;
     setCreating(true);
@@ -261,15 +245,16 @@ export function CreateProjectModal() {
       const executingVideo = executingVideoModel(models, globals, generationRoute === "reference_video");
       const executingImage = executingImageModel(models, globals);
       const modelSettings: Record<string, { resolution: string }> = {};
-      if (executingVideo && models.videoResolution) {
+      if (!isBook && executingVideo && models.videoResolution) {
         modelSettings[executingVideo] = { resolution: models.videoResolution };
       }
-      if (executingImage && models.imageResolution) {
+      if (outputMode !== "audiobook" && executingImage && models.imageResolution) {
         modelSettings[executingImage] = { resolution: models.imageResolution };
       }
 
       const resp = await API.createProject({
         title: basics.title.trim(),
+        output_mode: outputMode,
         content_mode: contentMode,
         aspect_ratio: basics.aspectRatio,
         generation_mode: generationRoute,
@@ -286,16 +271,16 @@ export function CreateProjectModal() {
                 ? { episode_target_duration: duration.episodeTargetDuration }
                 : {}),
             }),
-        style_template_id: style.mode === "template" ? style.templateId : null,
-        video_backend: models.videoBackend || null,
-        default_image_backend: models.imageBackendDefault || null,
+        style_template_id: outputMode !== "audiobook" && style.mode === "template" ? style.templateId : null,
+        video_backend: isBook ? null : models.videoBackend || null,
+        default_image_backend: outputMode === "audiobook" ? null : models.imageBackendDefault || null,
         default_text_backend: models.textBackendDefault || null,
         text_backend_simple: models.textBackendSimple || null,
         text_backend_complex: models.textBackendComplex || null,
         ...(Object.keys(modelSettings).length > 0 ? { model_settings: modelSettings } : {}),
-        narration_delivery: narration.delivery,
+        narration_delivery: isBook ? "post_production" : narration.delivery,
         // TTS 快照三项显式提交：落盘的就是向导里看到的值，服务端不再按全局默认补
-        ...(narration.delivery === "use_tts"
+        ...(!isBook && narration.delivery === "use_tts"
           ? {
               audio_backend: narration.audioBackend,
               narration_voice: narration.narrationVoice.trim(),
@@ -304,7 +289,7 @@ export function CreateProjectModal() {
           : {}),
       });
 
-      if (style.mode === "custom" && style.uploadedFile) {
+      if (outputMode !== "audiobook" && style.mode === "custom" && style.uploadedFile) {
         try {
           await API.uploadStyleImage(resp.name, style.uploadedFile);
         } catch {
@@ -322,7 +307,7 @@ export function CreateProjectModal() {
 
   const handleNext = () => {
     if (blocked) return;
-    if (isBook || step === 3) {
+    if (step === 3 || (step === 2 && outputMode === "audiobook")) {
       voidPromise(handleCreate)();
       return;
     }
@@ -341,27 +326,23 @@ export function CreateProjectModal() {
         <DialogHeader>
           <DialogTitle>{t("new_project")}</DialogTitle>
           <div className="mt-1.5">
-            {!isBook && <WizardStepper current={step} />}
+            <WizardStepper current={step} includeStyle={outputMode !== "audiobook"} />
           </div>
         </DialogHeader>
 
         <DialogBody ref={bodyRef}>
           <div className="mb-4 grid gap-2">
             <Label htmlFor="project-output-mode">{t("book_output_mode")}</Label>
-            <BookSelect id="project-output-mode" value={outputMode} disabled={creating} onChange={(value) => setOutputMode(value as typeof outputMode)} options={[
+            <BookSelect id="project-output-mode" value={outputMode} disabled={creating} onChange={(value) => { setOutputMode(value as typeof outputMode); if (value === "audiobook" && step === 3) goTo(2); if (value !== "video") setBasics((prev) => ({ ...prev, generationRoute: "storyboard", contentMode: prev.contentMode === "ad" ? "drama" : prev.contentMode, gridStoryboard: false })); }} options={[
               { value: "video", label: t("book_mode_video") },
               { value: "audiobook", label: t("book_mode_audiobook") },
               { value: "illustrated_audiobook", label: t("book_mode_illustrated") },
             ]} />
           </div>
-          {isBook && <div className="grid gap-2">
-            <Label htmlFor="book-project-title">{t("project_title")}</Label>
-            <Input ref={titleRef} id="book-project-title" value={basics.title} onChange={(event) => setBasics({ ...basics, title: event.target.value })} />
-            <p className="text-sm text-muted-foreground">{t(outputMode === "audiobook" ? "book_create_audio_hint" : "book_create_illustrated_hint")}</p>
-          </div>}
-          {!isBook && step === 1 && <WizardStepBasics value={basics} onChange={handleBasicsChange} titleRef={titleRef} />}
-          {!isBook && step === 2 && (
+          {step === 1 && <WizardStepBasics outputMode={outputMode} value={basics} onChange={handleBasicsChange} titleRef={titleRef} />}
+          {step === 2 && (
             <WizardStepGeneration
+              outputMode={outputMode}
               isAd={isAd}
               usesReferenceImages={basics.generationRoute === "reference_video"}
               duration={duration}
@@ -374,7 +355,7 @@ export function CreateProjectModal() {
               error={generationError}
             />
           )}
-          {!isBook && step === 3 && <StylePicker value={style} onChange={changeStyle} />}
+          {step === 3 && <StylePicker value={style} onChange={changeStyle} />}
         </DialogBody>
 
         <DialogFooter>
@@ -384,14 +365,14 @@ export function CreateProjectModal() {
           <p id={hintId} className="min-w-0 flex-1 text-right text-xs text-muted-foreground">
             {hint}
           </p>
-          {!isBook && step > 1 && (
+          {step > 1 && (
             <Button variant="outline" onClick={() => goTo((step - 1) as WizardStep)} disabled={creating}>
               {t("templates:prev_step")}
             </Button>
           )}
           <Button onClick={handleNext} disabled={blocked || creating} aria-describedby={hint ? hintId : undefined}>
             {creating && <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden />}
-            {isBook || step === 3 ? t("create_project") : t("templates:next_step")}
+            {step === 3 || (step === 2 && outputMode === "audiobook") ? t("create_project") : t("templates:next_step")}
           </Button>
         </DialogFooter>
       </DialogContent>

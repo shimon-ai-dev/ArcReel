@@ -401,8 +401,10 @@ describe("StudioCanvasRouter", () => {
       projectDetailLoading: true,
     });
 
+    const capabilities = vi.spyOn(API, "getVideoCapabilities");
     renderAt("/characters");
 
+    expect(capabilities).not.toHaveBeenCalled();
     expect(screen.getByText("加载中...")).toBeInTheDocument();
     expect(screen.queryByTestId("character-gallery")).not.toBeInTheDocument();
   });

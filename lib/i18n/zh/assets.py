@@ -1,4 +1,9 @@
 MESSAGES = {
+    "asset_library_import_invalid": "无法导入此资产库包，请检查清单和上传文件后重新预览",
+    "asset_library_import_stale": "预览后资产已发生变化，请重新预览后再应用",
+    "asset_library_import_conflict": "此次导入会覆盖受保护的资产，请先解决预览中的冲突",
+    "asset_library_import_content_conflict": "已存储的资产文件与内容标识不一致，未作更改，请恢复文件后再导入",
+    "val_asset_library_metadata_invalid": "资产“{name}”的“{field}”导入元数据无效",
     "asset_not_found": "资产「{name}」不存在",
     "asset_already_exists": "同类型下已有同名资产「{name}」",
     "asset_invalid_type": "资产类型必须为 character / scene / prop",

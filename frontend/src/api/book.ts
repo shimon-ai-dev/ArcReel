@@ -4,6 +4,9 @@ import type { BookDocument, BookState } from "@/types/book";
 
 export function bookPath(project: string) { return `/projects/${encodeURIComponent(project)}/book`; }
 export const bookApi = {
+  syncEpisode(project: string, episode: number): Promise<BookState> {
+    return API.request(`${bookPath(project)}/episodes/${episode}/sync`, { method: "POST" });
+  },
   get(project: string, signal?: AbortSignal): Promise<BookState> {
     return API.request(bookPath(project), { signal });
   },

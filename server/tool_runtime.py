@@ -1641,7 +1641,9 @@ async def _execute_draft_repair(
 
 
 class CreateProjectToolRequest(BaseModel):
-    output_mode: Literal["video", "audiobook", "illustrated_audiobook"] = "video"
+    output_mode: Literal["video", "audiobook", "illustrated_audiobook"] = Field(
+        default="video", description="项目输出模式：原视频、有声书或使用原分镜图的图声书；创建后固定"
+    )
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str = Field(description="项目唯一标识，只能包含字母、数字和连字符；后续工具以它寻址项目")

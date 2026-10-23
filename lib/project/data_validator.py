@@ -49,6 +49,7 @@ from lib.project.asset_types import (
     asset_name_comparison_key,
     project_asset_name_conflicts,
 )
+from lib.project.library_manifest import ExternalLibraryIdentity, ExternalVoice, ReferenceView
 from lib.project.project_manager import VALID_GENERATION_MODES as _VALID_GENERATION_MODES
 from lib.references.reference_catalog import ReferenceCatalog, build_reference_catalog
 from lib.script.script_models import (
@@ -535,6 +536,7 @@ class DataValidator:
                     errors.append(_m("val_asset_format_object", asset_type=_asset("character"), name=char_name))
                     continue
                 self._validate_asset_description(char_data, "character", char_name, errors)
+                self._validate_library_metadata(char_data, char_name, errors)
                 for field_name in char_extra_fields:
                     # spec 声明的 extra_string_fields（voice_style / reference_image 等）若存在
                     # 须为字符串（可空），否则下游消费方（如把 reference_image 当路径拼接）
@@ -597,6 +599,27 @@ class DataValidator:
         self._validate_project_catalog(project.get("scenes") or {}, errors, field_label="scenes")
         self._validate_project_catalog(project.get("props") or {}, errors, field_label="props")
         self._validate_project_catalog(project.get("products") or {}, errors, field_label="products")
+
+    @staticmethod
+    def _validate_library_metadata(data: dict, name: str, errors: list[ValidationMessage]) -> None:
+        for field, model in (("external_library", ExternalLibraryIdentity), ("external_voice", ExternalVoice)):
+            if field not in data:
+                continue
+            try:
+                model.model_validate(data[field])
+            except ValidationError:
+                errors.append(_m("val_asset_library_metadata_invalid", name=name, field=field))
+        if "reference_views" in data:
+            try:
+                views = data["reference_views"]
+                if not isinstance(views, list):
+                    raise ValueError("reference_views must be a list")
+                for view in views:
+                    ReferenceView.model_validate(view)
+            except (ValidationError, ValueError):
+                errors.append(_m("val_asset_library_metadata_invalid", name=name, field="reference_views"))
+        if "reference_audio_transcript" in data and not isinstance(data["reference_audio_transcript"], str):
+            errors.append(_m("val_asset_library_metadata_invalid", name=name, field="reference_audio_transcript"))
 
     @staticmethod
     def _validate_asset_description(
@@ -726,6 +749,7 @@ class DataValidator:
                 errors.append(_m("val_asset_format_object", asset_type=kind, name=name))
                 continue
             self._validate_asset_description(data, asset_type, name, errors)
+            self._validate_library_metadata(data, name, errors)
             for field_name in extra_fields:
                 val = data.get(field_name)
                 if val is not None and not isinstance(val, str):

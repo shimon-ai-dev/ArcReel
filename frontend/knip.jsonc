@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
   "project": ["src/**/*.{ts,tsx,css}", "e2e/**/*.ts", "*.{ts,js}"],
+  "playwright": { "config": ["playwright.config.ts", "playwright.book.config.ts"] },
   "ignoreBinaries": ["uv"],
   "ignoreExportsUsedInFile": true,
   // shadcn 原语模块按成套 API 导出子组件（如 TooltipTrigger、DialogFooter），暂无调用方也要保留，

@@ -35,6 +35,7 @@ CAPABILITY_FAILURE_CODES: frozenset[str] = frozenset(
         "image_endpoint_mismatch_no_i2i",
         "image_endpoint_mismatch_no_t2i",
         "image_reference_images_unreadable",
+        "image_reference_images_exceeded",
         "ref_payload_floor_exceeded",
         "video_capability_missing_t2v",
         "video_duration_invalid",

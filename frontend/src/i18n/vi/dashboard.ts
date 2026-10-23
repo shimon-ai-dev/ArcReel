@@ -1,6 +1,28 @@
 import type enDashboard from "@/i18n/en/dashboard";
 
 export default {
+  "book_edit_original_source": "Text comes from the original episode. Edit its source or storyboard content and sync again; only pronunciation and delivery are edited here.",
+  "book_bound_character": "Linked to original character asset {{name}}. Update reference audio in that character asset, then sync this episode.",
+  "book_episode_stale": "The episode source or storyboard changed. Sync again and review speech and scene sounds.",
+  "book_clone_mode": "Voice cloning mode",
+  "book_cue_needs_asset": "Sound cue: bind an audio asset (not generated audio)",
+  "book_episode_audio": "Audio",
+  "book_episode_listen": "Listen & export",
+  "book_episode_reuse_hint": "Reuse this episode’s source, storyboard and assets. Sync to configure audio; no video step.",
+  "book_sync_episode": "Sync episode to audio",
+  "book_episode_not_synced": "Complete the original episode breakdown, then sync audio.",
+  "book_generate_episode": "Generate episode audio",
+  "book_legacy_drafts": "Preserved legacy audio drafts",
+  "book_legacy_drafts_hint": "These drafts are preserved but are not linked to original episodes.",
+  "book_current_segment": "Current speech segment",
+  "book_text_pronunciation": "Text & pronunciation",
+  "book_performance_details": "Delivery & pauses",
+  "book_voice_setup_later": "Configure voice cloning and VoxCPM2 in the episode Audio tab.",
+  "book_vox_controllable": "Controllable voice cloning",
+  "book_vox_continuation": "Reference continuation",
+  "book_reference_text": "Exact reference transcript (required for continuation)",
+  "book_vox_limits": "Controllable mode uses natural-language emotion and delivery. Continuation requires an exact transcript and does not accept emotion prefixes. Numeric emotion, speed and standalone nonverbal sounds are not native controls. Reference files must be readable by your configured local bridge; ambience uses separate tracks.",
+
   "book_reference_digest": "Mã băm / phiên bản âm thanh tham chiếu (đổi khi thay tệp cùng tên)",
   "book_provider_config_hint": "Đặt URL dịch vụ và thông tin xác thực trong Cài đặt nhà cung cấp. Nhập mã provider/model đã cấu hình ở đây; hồ sơ giọng không thay URL dịch vụ.",
   "book_narrator": "Người kể chuyện",

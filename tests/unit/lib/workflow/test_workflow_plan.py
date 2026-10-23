@@ -417,3 +417,18 @@ def test_structure_problem_is_stated_once_on_its_step_with_its_unit() -> None:
         "unit_id": "E1S02",
         "params": {},
     }
+
+
+@pytest.mark.parametrize("mode", ["audiobook", "illustrated_audiobook"])
+def test_book_modes_keep_original_steps_and_skip_video(mode):
+    status = _status(action="fix_input")
+    status.project.output_mode = mode
+    status.next_action.args = {"tool": "book_project", "action": "sync_episode", "episode": 1}
+    plan = build_workflow_plan(status, admission={"decision": "rejected"})
+    assert _step(plan, "script_plan_content").required
+    assert _step(plan, "video").state == WorkflowStepState.SKIPPED
+    assert _step(plan, "edit").state == WorkflowStepState.SKIPPED
+    assert _step(plan, "book").action == status.next_action
+    assert _step(plan, "storyboard").required == (mode == "illustrated_audiobook")
+    assert _step(plan, "asset_sheets").required == (mode == "illustrated_audiobook")
+    assert plan.next_action == status.next_action

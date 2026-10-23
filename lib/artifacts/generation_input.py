@@ -57,6 +57,11 @@ from lib.prompts.prompt_builders import (
     render_storyboard_image_prompt,
 )
 from lib.prompts.reference_image_numbering import PREVIOUS_STORYBOARD_ROLE, clamp_reference_images
+from lib.references.multiview_references import (
+    confirmed_reference_views,
+    has_reference_views,
+    ordered_reference_views,
+)
 from lib.references.reference_admission import SHEET_MISSING_CODE, UNREGISTERED_REFERENCE_CODE
 from lib.references.reference_catalog import ReferenceCatalog, build_reference_catalog
 from lib.script.storyboard_sequence import find_storyboard_item, get_storyboard_items
@@ -340,10 +345,12 @@ def storyboard_image_input(
 
     装配序：商品（每件先资产图、再原图；没有资产图的商品只用原图）→ 角色、场景、道具资产图
     （按字段序）→ 上一分镜图（序号大于 0 且不是 ``segment_break`` 时），整条按路径去重、保留
-    首次出现。
+    首次出现。导入多视图的资产只使用已确认视图，并先为每个角色、场景、道具、商品与上一分镜
+    保留一个锚点，再轮流补充符合镜头景别和角度的视图；未导入多视图的项目沿用原有顺序。
 
     缺口：引用未登记；角色、场景、道具没有资产图或资产图不可用；商品声明了资产图但不可用；
-    声明了原图但读不到；提示词待生成。略去：上一分镜图不可用。商品既没有资产图也没有原图时
+    导入的视图未确认、角色缺少已确认身份视图；声明了原图但读不到；提示词待生成。
+    略去：上一分镜图不可用。商品既没有资产图也没有原图时
     只用文字，不算缺口。
 
     条目不存在或字段结构损坏抛 ``ValueError``。
@@ -371,10 +378,11 @@ def storyboard_image_input(
         assembly.add_product(catalog, name)
     for asset_type, field in (("character", char_field), ("scene", scene_field), ("prop", prop_field)):
         for name in _reference_names(item, field):
-            assembly.add_sheet(catalog, asset_type, name)
+            assembly.add_storyboard_asset(catalog, asset_type, name, image_prompt=image_prompt)
 
     if index > 0 and not item.get("segment_break"):
         assembly.add_previous_storyboard(items[index - 1], id_field=id_field, episode=episode)
+    assembly.balance_multiview_references()
 
     return StoryboardImageInput(
         semantics=StoryboardImageSemantics(
@@ -599,6 +607,58 @@ class _Assembly:
         if observed is None or observed.artifact_path != entry.artifact_path:
             return None
         return observed, ArtifactInputClaim(key=key, artifact_path=observed.artifact_path)
+
+    def add_storyboard_asset(
+        self, catalog: ReferenceCatalog, asset_type: str, name: str, *, image_prompt: object
+    ) -> None:
+        """Use approved imported views, otherwise preserve the generated-sheet route."""
+        entry = catalog.lookup(asset_type, name)
+        if entry is None or not has_reference_views(entry.asset):
+            self.add_sheet(catalog, asset_type, name)
+            return
+        views = ordered_reference_views(confirmed_reference_views(entry.asset), image_prompt)
+        if not views or (asset_type == "character" and not any(view.role == "identity" for view in views)):
+            self.gap(InputGap("reference_views_unconfirmed", asset_type, entry.name))
+            return
+        for view in views:
+            observed = self._observation.observe(view.path)
+            if observed is None:
+                self.gap(InputGap(ORIGINAL_MISSING_CODE, asset_type, entry.name))
+                continue
+            self._append(
+                AssembledReference(
+                    visual=VisualReference(
+                        path=observed.path,
+                        role=view.role,
+                        logical_type=asset_type,
+                        logical_id=entry.name,
+                        kind="library_view",
+                        content_digest=observed.content_digest,
+                        view=view.view or "unknown",
+                        framing=view.framing or "unknown",
+                    ),
+                    artifact_path=observed.artifact_path,
+                )
+            )
+
+    def balance_multiview_references(self) -> None:
+        """Reserve one slot per subject/environment and continuity before extra views.
+
+        Only imported multiview shots use this ordering. Legacy sheets keep their
+        original ordering. Within each asset, shot-aware view order is retained.
+        The provider's actual limit is applied later, equally in preview/freeze.
+        """
+        if not any(reference.visual.kind == "library_view" for reference in self.references):
+            return
+        groups: dict[tuple[str | None, str | None], list[AssembledReference]] = {}
+        for reference in self.references:
+            key = (reference.visual.logical_type, reference.visual.logical_id)
+            groups.setdefault(key, []).append(reference)
+        priorities = {"character": 0, "scene": 1, "product": 2, "prop": 3, "storyboard": 4}
+        ordered = sorted(groups.values(), key=lambda group: priorities.get(group[0].visual.logical_type or "", 5))
+        self.references = [group[0] for group in ordered]
+        for position in range(1, max(map(len, ordered), default=1)):
+            self.references.extend(group[position] for group in ordered if position < len(group))
 
     def add_sheet(self, catalog: ReferenceCatalog, asset_type: str, name: str) -> None:
         entry = catalog.lookup(asset_type, name)
@@ -836,6 +896,21 @@ def _render_clamped(
 ) -> RenderedInput:
     clamp = clamp_reference_images(visuals, max_reference_images, model=model)
     warning = clamp.warning()
+    if warning is not None and any(visual.kind == "library_view" for visual in visuals):
+
+        def label(visual: VisualReference) -> str:
+            return " / ".join(value for value in (visual.logical_id, visual.role, visual.framing, visual.view) if value)
+
+        warning = {
+            "key": "ref_multiview_selected",
+            "params": {
+                "count": clamp.total,
+                "model": model,
+                "max_count": max_reference_images,
+                "selected": "; ".join(label(visual) for visual in visuals[: clamp.kept]),
+                "omitted": "; ".join(label(visual) for visual in visuals[clamp.kept :]),
+            },
+        }
     return RenderedInput(
         prompt=_render_prompt(semantics, visuals[: clamp.kept]),
         sent_count=clamp.kept,

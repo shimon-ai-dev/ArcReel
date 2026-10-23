@@ -9,9 +9,10 @@
 （:class:`lib.artifacts.visual_artifact_provenance.VisualReference` 满足该协议）。参考图列表仍由
 条目的引用字段决定，mention 只指认、不派生参考图。
 
-图像后端各有参考图数量上限，超限的尾部由后端自己丢弃。编排层须先经
-:func:`clamp_reference_images` 按后端上限裁剪、再进本模块编号，声明行才不会指认没发出的图；
-裁剪判定同时给出与任务 ``result.warnings`` 同形的 warning，用户与 Agent 由此得知有参考图被丢弃。
+图像后端各有参考图数量上限。编排层先完成视图优先级排序，再经
+:func:`clamp_reference_images` 按后端上限裁剪、最后编号，声明行才不会指认没发出的图；
+裁剪判定同时给出与任务 ``result.warnings`` 同形的 warning，用户与 Agent 由此得知有参考图被省略。
+ComfyUI 的槽位是硬上限，绕过编排层的超限请求在上传前拒绝，不静默丢图。
 """
 
 from __future__ import annotations
@@ -69,6 +70,24 @@ def _image_label(position: int) -> str:
 def _describe(slot: ReferenceImageSlot) -> str:
     if slot.role == PREVIOUS_STORYBOARD_ROLE:
         return _PREVIOUS_STORYBOARD_DESCRIPTION
+    roles = {
+        "identity": "身份基准，只锁定同一人的脸型、五官和身体比例，不借用其服装",
+        "look": "造型参考，只参考服装、发型和配饰，不替换身份",
+        "action": "动作参考，只参考姿态，不替换身份或造型",
+        "space": "空间参考，保持布局、材质和地标一致",
+    }
+    if slot.role in roles:
+        views = {"front": "正面", "left": "左侧", "right": "右侧", "back": "背面"}
+        framings = {"headshot": "大头照", "full_body": "全身照"}
+        view = getattr(slot, "view", None) or ""
+        framing = getattr(slot, "framing", None) or ""
+        labels = [
+            slot.logical_id,
+            framings.get(framing, framing),
+            views.get(view, view),
+            roles[slot.role],
+        ]
+        return " / ".join(label for label in labels if label)
     if slot.logical_type in _TYPE_DESCRIPTIONS:
         return _TYPE_DESCRIPTIONS[slot.logical_type]
     return _EXTRA_DESCRIPTION

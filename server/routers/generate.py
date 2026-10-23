@@ -144,7 +144,7 @@ async def generate_storyboard(
         # 正式脚本的提示词才是生成依据：条目提示词待生成时拒绝，请求体里的 prompt 不能代替它。
         if resolved[0].get("image_prompt") is None:
             raise ConflictError("script_prompt_pending", segment_id=segment_id)
-        require_admitted_storyboard_references(project, [resolved[0]])
+        require_admitted_storyboard_references(project, [resolved[0]], allow_reference_views=True)
 
     await run_sync_transaction(_sync)
 

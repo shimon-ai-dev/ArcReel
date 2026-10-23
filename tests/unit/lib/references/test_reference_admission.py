@@ -236,3 +236,37 @@ def test_storyboard_item_admits_a_derivative_written_in_characters_in_shot():
     admission = admit_storyboard_item(catalog, {"characters_in_shot": ["张三/劲装"]})
 
     assert admission.without_sheet == (("character", "张三/劲装"),)
+
+
+def test_confirmed_multiview_admission_is_opt_in_and_never_approves_pending_views():
+    asset = {
+        "reference_views": [
+            {
+                "path": "characters/front.png",
+                "role": "identity",
+                "view": "front",
+                "framing": "headshot",
+                "sha256": "a" * 64,
+                "frozen": True,
+                "confirmed": True,
+            }
+        ]
+    }
+    catalog = _catalog(character={"Alice": asset})
+    item = {"characters_in_segment": ["Alice"]}
+    assert not admit_storyboard_item(catalog, item).admitted
+    assert admit_storyboard_item(catalog, item, allow_reference_views=True).admitted
+    assert admit_storyboard_items(catalog, [item], allow_reference_views=True).admitted
+    asset["reference_views"][0]["confirmed"] = False
+    assert not admit_storyboard_item(catalog, item, allow_reference_views=True).admitted
+
+
+def test_pending_import_does_not_fall_back_to_a_sheet_in_image_admission():
+    asset = {
+        "character_sheet": "characters/old.png",
+        "reference_views": [{"path": "characters/pending.png", "role": "identity", "confirmed": False}],
+    }
+    catalog = _catalog(character={"Alice": asset})
+    item = {"characters_in_segment": ["Alice"]}
+    assert admit_storyboard_item(catalog, item).admitted  # Legacy video policy is unchanged.
+    assert not admit_storyboard_item(catalog, item, allow_reference_views=True).admitted

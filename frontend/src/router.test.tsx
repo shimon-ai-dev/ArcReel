@@ -290,6 +290,25 @@ describe("AppRoutes", () => {
     });
   });
 
+  it("keeps the original shell available and recovers by navigating after a failed load", async () => {
+    vi.spyOn(API, "getProject").mockImplementation(async (name) => {
+      if (name === "fail-demo") throw new Error("network");
+      return { project: { title: "Recovered", content_mode: "narration", style: "Anime", episodes: [], characters: {}, scenes: {}, props: {} }, scripts: {} };
+    });
+    const location = memoryLocation({ path: "/app/projects/fail-demo" });
+    render(<Router hook={location.hook}><AppRoutes /></Router>);
+    await waitFor(() => expect(useProjectsStore.getState().projectDetailLoading).toBe(false));
+    expect(screen.getByTestId("studio-layout")).toBeInTheDocument();
+    expect(useProjectsStore.getState().currentProjectData).toBeNull();
+
+    act(() => location.navigate("/app/projects/recovered"));
+
+    await waitFor(() => expect(useProjectsStore.getState().currentProjectData?.title).toBe("Recovered"));
+    expect(useProjectsStore.getState().projectDetailLoading).toBe(false);
+    expect(screen.getByTestId("studio-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-canvas-router")).toBeInTheDocument();
+  });
+
   it("redirects unauthenticated nested project URL to top-level /login", async () => {
     useAuthStore.setState({ isAuthenticated: false, isLoading: false });
     renderAt("/app/projects/demo");

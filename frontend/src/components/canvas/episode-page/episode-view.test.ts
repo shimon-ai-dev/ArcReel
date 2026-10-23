@@ -117,3 +117,14 @@ describe("staysInEpisodeView", () => {
     expect(staysInEpisodeView("/episodes/1?view=grid", "/episodes/1", SCRIPTED)).toBe(true);
   });
 });
+
+ describe("book modes in the original episode", () => {
+ it("keeps storyboard, audio and listen without video editing for illustrated books", () => {
+ expect(episodeViewTabs({ ...SCRIPTED, outputMode: "illustrated_audiobook", grid: true }).map(t => t.view)).toEqual(["plan", "board", "audio", "listen"]);
+ });
+ it("skips visual stages and defaults to audio for audio-only books", () => {
+ const facts = { ...SCRIPTED, outputMode: "audiobook" as const };
+ expect(episodeViewTabs(facts).map(t => t.view)).toEqual(["plan", "audio", "listen"]);
+ expect(defaultEpisodeView(facts)).toBe("audio");
+ });
+ });

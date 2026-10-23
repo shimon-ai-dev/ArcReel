@@ -110,6 +110,7 @@ export function TimelineCanvas(props: TimelineCanvasProps) {
   } = demoReadOnly ? { ...props, ...DEMO_READ_ONLY_PROPS } : props;
 
   const { t } = useTranslation("dashboard");
+  const isBook = projectData?.output_mode === "audiobook" || projectData?.output_mode === "illustrated_audiobook";
   const contentMode = projectData?.content_mode ?? "narration";
   // 分镜编辑子视图按剧本形状显式分派：narration（segments）/ drama（scenes）/ ad（shots）。
   // 未知/脏 content_mode 沿用历史兜底落 drama 视图。
@@ -197,10 +198,10 @@ export function TimelineCanvas(props: TimelineCanvasProps) {
   const handleGenSb = onGenerateStoryboard
     ? (segId: string) => onGenerateStoryboard(segId, scriptFile)
     : undefined;
-  const handleGenVid = onGenerateVideo
+  const handleGenVid = !isBook && onGenerateVideo
     ? (segId: string) => onGenerateVideo(segId, scriptFile)
     : undefined;
-  const handleGenNarration = onGenerateNarration
+  const handleGenNarration = !isBook && onGenerateNarration
     ? (segId: string) => onGenerateNarration(segId, scriptFile)
     : undefined;
 
@@ -218,13 +219,13 @@ export function TimelineCanvas(props: TimelineCanvasProps) {
             disabled={demoReadOnly}
             onClick={() => setBatchKind("storyboards")}
           />
-          <BatchFillButton
+          {!isBook && <BatchFillButton
             kind="videos"
             count={videoGap}
             disabled={demoReadOnly}
             onClick={() => setBatchKind("videos")}
-          />
-          {contentMode === "narration" && onGenerateEpisodeNarration && (
+          />}
+          {!isBook && contentMode === "narration" && onGenerateEpisodeNarration && (
             <BatchFillButton
               kind="narration"
               count={narrationGap}

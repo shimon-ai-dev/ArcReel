@@ -1,6 +1,28 @@
 import type enDashboard from '../en/dashboard';
 
 export default {
+  "book_edit_original_source": "文本来自原有章节。请在原文或分镜内容中修改，再同步；此处仅调整读音和表演。",
+  "book_bound_character": "已关联原有人物资产 {{name}}。参考声音请在该人物资产中更新，再同步本章。",
+  "book_episode_stale": "本章原文或分镜已变化，请重新同步后检查声音与场景音。",
+  "book_clone_mode": "音色克隆模式",
+  "book_cue_needs_asset": "场景音意图，待绑定音频素材（未生成声音）",
+  "book_episode_audio": "声音",
+  "book_episode_listen": "试听与导出",
+  "book_episode_reuse_hint": "沿用本章节的原文、分镜与资产。同步后配置声音，不再生成视频。",
+  "book_sync_episode": "同步本章分镜到声音",
+  "book_episode_not_synced": "先在原有流程完成本章拆解，再同步声音。",
+  "book_generate_episode": "生成本章声音",
+  "book_legacy_drafts": "保留的旧声音草稿",
+  "book_legacy_drafts_hint": "这些草稿尚未关联原有章节，内容仍保留。",
+  "book_current_segment": "当前语音段",
+  "book_text_pronunciation": "文本与读音修正",
+  "book_performance_details": "表演与停顿",
+  "book_voice_setup_later": "声音克隆与 VoxCPM2 在章节的声音页配置。",
+  "book_vox_controllable": "可控音色克隆",
+  "book_vox_continuation": "参考语音续写",
+  "book_reference_text": "参考音频逐字文本（续写模式必填）",
+  "book_vox_limits": "可控模式使用自然语言情绪与表演描述；续写模式不接受情绪前缀。数值情绪、语速、独立喘息等不是原生控制项。参考文件需在已配置的本地桥接服务中可读，环境音另轨处理。",
+
   "book_reference_digest": "参考音频摘要 / 修订标记（同名文件替换后需更新）",
   "book_provider_config_hint": "服务地址与凭据请在供应商设置中配置。这里填写已配置的 provider/model 标识，声音配置不会覆盖供应商服务地址。",
   "book_narrator": "旁白",

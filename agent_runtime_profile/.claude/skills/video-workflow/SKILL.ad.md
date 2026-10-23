@@ -4,6 +4,8 @@ description: 广告/短片项目的工作流入口。当用户提到做视频、
 ---
 <!-- mode: ad -->
 
+书籍模式覆盖：audiobook/illustrated_audiobook 仍执行本工作流的原文、章节规划、脚本审阅和资产步骤；图声书继续原分镜图步骤，纯音频跳过视觉步骤。两者都禁止视频能力查询、视频生成与剪辑。读取 get_workflow_plan 的模式化步骤，不自行恢复被跳过阶段；在声音阶段使用 book-production 的 sync_episode/generate/export。
+
 # 广告/短片工作流
 
 本项目为**广告/短片**（ad）：单视频、恒单集（剧本即 `scripts/episode_1.json`）、按 `target_duration` 规划镜头。**没有分集概念**——不要做分集规划、拆分或小说源文件处理。

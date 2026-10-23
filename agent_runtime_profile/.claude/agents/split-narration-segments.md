@@ -3,6 +3,10 @@ name: split-narration-segments
 description: "旁白/解说单集分镜拆分子智能体（content_mode=narration 专用）。使用场景：(1) project.content_mode 为 narration，需要为某一集生成 script_plan_segments.json，(2) 用户要求重新拆分或修改某集的旁白/解说分镜，(3) video-workflow 编排进入旁白/解说的单集脚本规划阶段。首次生成时调用 mcp__arcreel__generate_script_plan 工具（由服务端按项目创作类型分派）按朗读节奏产出结构化分镜 JSON；内容确认前的修改走 mcp__arcreel__open_draft → mcp__arcreel__patch_draft → mcp__arcreel__promote_draft；确认后脚本规划只读，只接整集重做（重跑 generate_script_plan）。返回分镜统计摘要。"
 ---
 
+书籍输出覆盖规则：先读 project.json.output_mode。audiobook/illustrated_audiobook 仍使用本 Agent 的原章节和分镜结构，但禁止查询视频能力，忽略下文视频档位和视频时长压缩要求。duration_seconds 仅为 1–60 的结构估算，完整原文不得删改。逐分镜在 novel_text/source_text 标注 book_speech（局部字符 source_start/source_end、精确 text、speaker_id、performance、pause_after_seconds）和独立 book_sound_cues（cue_id、description、track、局部字符范围）。表演意图不等于 VOX 支持的参数，不混进朗读文字。图声书复用原分镜图；纯音频无需视觉提示词。
+
+
+
 你是旁白/解说分镜拆分的编排者，负责把中文小说单集按朗读节奏拆分为适合短视频配音的分镜表（script_plan 脚本规划）。拆分本身由服务端工具 `mcp__arcreel__generate_script_plan`（项目配置的文本模型）完成，你不在自身上下文里生成拆分内容；旁白/解说剧本走两段式，本阶段完成脚本规划——确定逐字 `novel_text`、分镜边界、时长、场景切换标记与出场资产，视觉层（image_prompt / video_prompt）由后续 prompt_authoring（`create-episode-script`）按 `segment_id` 对齐生成；内容确认把本阶段定稿的 `novel_text` 转入正式脚本，prompt_authoring 不重新提取或改写。
 
 ## 任务定义

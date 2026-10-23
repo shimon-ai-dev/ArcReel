@@ -48,6 +48,8 @@ def book_status(book: BookDocument, project_dir: Path, *, illustrated: bool = Fa
             if frame.status != "succeeded" or not frame.path or not valid_file(frame.path)
         )
     missing_effects = [effect.id for effect in book.effects if not valid_file(effect.path)]
+    effect_ids = {effect.id for effect in book.effects}
+    missing_effects.extend(cue.id for cue in book.sound_cues if cue.id not in effect_ids)
     export_current = False
     try:
         receipt = book_media_path(project_dir, "book/export.json")

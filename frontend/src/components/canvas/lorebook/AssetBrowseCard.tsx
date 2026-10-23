@@ -264,6 +264,7 @@ export const AssetBrowseCard = memo(function AssetBrowseCard({
         <p className="line-clamp-2 text-sm text-subtle-foreground">
           {asset.description.trim() || <span className="text-muted-foreground">{t("assets:no_description")}</span>}
         </p>
+        {asset.externalIdentity && <p className="text-xs text-muted-foreground wrap-break-word">{asset.externalIdentity.external_id} · {asset.externalIdentity.baseline || t("assets:external_unspecified")} · {asset.externalIdentity.look || t("assets:external_unspecified")}</p>}
         <CardCounts asset={asset} />
       </div>
 

@@ -17,9 +17,6 @@ async function submitBook(project: string, kind: ResourceKind, ids: string[], en
 export function generateBookSpeech(project: string, ids: string[], force = false) {
   return submitBook(project, "book_tts", ids, "/generate", { segment_ids: ids, force });
 }
-export function generateBookKeyframe(project: string, id: string) {
-  return submitBook(project, "book_keyframe", [id], `/keyframes/${encodeURIComponent(id)}/generate`, {});
-}
 export function exportBook(project: string, format: "wav" | "mp3") {
   return submitBook(project, "book_export", ["book"], "/export", { format });
 }

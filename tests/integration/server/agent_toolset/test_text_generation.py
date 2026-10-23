@@ -1450,3 +1450,74 @@ async def test_generate_episode_script_truncation_offers_the_way_out(fake_ctx: T
         GenerationAction.CONFIGURE_PROVIDER,
         _TRUNCATION_PARAMS,
     )
+
+
+async def test_book_llm_plan_persists_source_performance_through_original_materialization(fake_ctx, monkeypatch):
+    from lib.script.script_document import build_materialized_script
+    from server import text_generation as mod
+
+    fake_ctx.pm.project_payload["output_mode"] = "audiobook"
+    source = fake_ctx.project_path / "source"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "episode_1.txt").write_text("从前有座山", encoding="utf-8")
+
+    class Generator:
+        async def generate(self, request, **kwargs):
+            assert "book_speech" in request.prompt
+            assert "不代表视频档位" in request.prompt
+            schema = request.response_schema.model_json_schema()
+            assert "BookSpeechAnnotation" in schema["$defs"]
+            return type(
+                "Result",
+                (),
+                {
+                    "text": json.dumps(
+                        {
+                            "title": "一",
+                            "scenes": [
+                                {
+                                    "scene_id": "E1S01",
+                                    "duration_seconds": 8,
+                                    "characters_in_scene": [],
+                                    "scenes": [],
+                                    "props": [],
+                                    "scene_description": "山",
+                                    "utterances": [],
+                                    "source_text": "从前有座山",
+                                    "book_speech": [
+                                        {
+                                            "source_start": 0,
+                                            "source_end": 5,
+                                            "text": "从前有座山",
+                                            "speaker_id": "narrator",
+                                            "performance": {"emotion": "calm"},
+                                        }
+                                    ],
+                                    "book_sound_cues": [
+                                        {"cue_id": "wind", "description": "山风", "source_start": 0, "source_end": 5}
+                                    ],
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    )
+                },
+            )()
+
+    async def create(*args, **kwargs):
+        return Generator()
+
+    async def no_video(*args, **kwargs):
+        raise AssertionError("Book chapter planning must not query video capability")
+
+    monkeypatch.setattr(mod.TextGenerator, "create", create)
+    monkeypatch.setattr(mod, "storyboard_request_facts", no_video)
+    result = await run_declared_tool("generate_script_plan", fake_ctx, {"episode_id": 1})
+    assert result.problem is None, result
+    saved = json.loads((fake_ctx.project_path / "drafts/episode_1/script_plan_normalized_script.json").read_text())
+    formal = build_materialized_script(
+        fake_ctx.pm.load_project(fake_ctx.project_name), 1, plan_kind="drama", plan_entries=saved["scenes"], title="一"
+    )
+    assert formal["scenes"][0]["book_speech"][0]["performance"]["emotion"] == "calm"
+    assert formal["scenes"][0]["book_sound_cues"][0]["description"] == "山风"
+    assert not formal["scenes"][0].get("needs_replan")

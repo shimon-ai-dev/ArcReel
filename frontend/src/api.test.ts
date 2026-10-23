@@ -70,6 +70,26 @@ describe("API", () => {
     }));
   });
 
+  it.each(["preview", "apply"] as const)("sends external-library %s as multipart content with an encoded project and token only on apply", async (action) => {
+    const response = { preview_token: "synthetic-token", can_apply: true, summary: { added: 1, updated: 0, unchanged: 0, conflicts: 0, pending_voice_bindings: 0, deduplicated_files: 0 }, entries: [] };
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse({ jsonData: response }));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["synthetic-image"], "front.png", { type: "image/png" });
+    const manifest = '{"schema_version":1,"library_id":"synthetic","entries":[]}';
+    const result = action === "preview"
+      ? await API.previewExternalLibrary("demo project", manifest, [file])
+      : await API.applyExternalLibrary("demo project", manifest, [file], "reviewed-token");
+
+    expect(result).toEqual(response);
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/v1/projects/demo%20project/assets/library-import/${action}`);
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const form = request.body as FormData;
+    expect(form.get("manifest")).toBe(manifest);
+    expect(form.getAll("files").map((value) => (value as File).name)).toEqual(["front.png"]);
+    expect(form.get("preview_token")).toBe(action === "apply" ? "reviewed-token" : null);
+    expect(new Headers(request.headers).has("Content-Type")).toBe(false);
+  });
+
   describe("request", () => {
     it("returns parsed JSON and applies default JSON header", async () => {
       const fetchMock = vi.fn().mockResolvedValue(

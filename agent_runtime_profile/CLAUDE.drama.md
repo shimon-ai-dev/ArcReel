@@ -1,22 +1,18 @@
 # AI 视频生成工作空间
 <!-- mode: drama -->
 
-## 输出模式优先分流
+## 输出模式与原有章节工作流
 
-第一步读取 project.json 的 output_mode，缺失按 video。output_mode 与 content_mode、generation_mode 是独立维度。
-若为 audiobook 或 illustrated_audiobook，以下视频制作规范不适用，执行本节：
+先读 project.json 的 output_mode，缺省 video。书籍模式仍使用原界面、原章节账本、原文导入、章节规划、script_plan 审阅和正式剧本，不创建另一套书籍/关键帧工作区。以下原有章节、资产和审阅规范仍适用；只有视频阶段不适用。
 
-1. 使用 mcp__arcreel__book_project(action="status") 读取书籍、能力、覆盖、时间线及完成状态；使用 get_workflow_plan 观察真实队列，不把排队/运行中当作完成。
-2. action="import_source" 导入完整原文。保留旁白、对白、“他说”、原文顺序及标点，不摘要或为时长删改。章节和语音段已有稳定 ID 与源文位置；说话人不确定时标为未确认并让用户修正。
-3. 根据上下文识别角色，为 narrator 与每个角色配置持久 voices。用 action="save_document" 保存完整文档及读取时的 revision；原始文本不能混入情绪、喘息、停顿或音效说明。发音修正使用独立 pronunciation 映射。
-4. 依据 capabilities 将情绪、强度、表达风格写入 performance，将确定停顿写入 pause_after_seconds。不支持的情绪、语速、非语言发声必须明确报告，不能静默忽略或换模型/声音。原生喘息等能力缺失时，可提出导入有来源的音效，并说明声音一致性限制。
-5. action="generate" 对缺失或过期段入队；失败时读取 error、修正配置后按 segment_ids 重试，成功段不重做。先试听并核对角色声音与表达，文本覆盖通过不等于语音质量通过。
-6. 音效、环境声与配乐分轨，绑定 segment_id 加 offset_seconds，设置音量、淡入淡出、循环、范围与 ducking；素材由用户导入或本地素材库提供，记录 source。时间由实际音频时长和明确静音推导，不能用视频时长档位。
-7. audiobook 不配置、不查询、不生成图片或视频。illustrated_audiobook 在音频基础上按情节/密度建立 keyframes，允许一图覆盖多段，用 segment_id 锚定，可引用现有角色/场景参考图；action="keyframe" 复用图像 Provider，包括已有 ComfyUI 通路，不调用视频。
-8. action="export" 导出 WAV/MP3 章节与整本音频；图声书同时导出 manifest 与 HTML 播放包，不要求 MP4。更新任一语音时长/停顿后重新检查切图和音效锚点并重导出。缺失、失败、过期语音或覆盖不完整不得报告已完成；以 status.complete 的当前导出凭据为准。
+1. audiobook 与 illustrated_audiobook 保留全部章节原文、标点和说话提示，不为时长删改。内置章节拆解在原有分镜 novel_text/source_text 内标注 book_speech 的局部字符范围、原样 text、speaker_id、performance、pause_after_seconds；场景声放独立 book_sound_cues，不混进朗读文本。
+2. illustrated_audiobook 的图片就是原有分镜图，沿用原图像生成任务、角色/场景/道具资产与连续性参考。不要另建 keyframes 或调用独立 keyframe 生成。优先用户要求的真人剧质感、人物和场景一致性。audiobook 跳过图像提示词、参考图要求和图像生成。
+3. 两种书籍模式都隐藏并跳过视频制作，不查询视频能力，不要求视频模型，不生成视频/视频时间线。原有 video 模式保持原工作流。
+4. 原章节剧本就绪后，使用 book_project(action="sync_episode", episode=当前集号) 同步原文、语音段及现有分镜锚点，再查看 status。使用已有 voices 和 save_document 修正声音、说话人及表演意图；不会改变原文。配置必须遵循实际 VOX 能力，不把其他 TTS 的情绪向量/标签冒充 VOX 参数。
+5. generate 只生成缺失或失效语音，试听普通说话、音色还原、情绪、停顿、拉长音、呼吸/哭笑等真实效果；未支持的表演明确报告，不静默降级。环境声与配乐独立轨道，来源和授权明确，不能声称 VOX 自动生成场景音。
+6. export 输出章节和全书音频，图声书导出复用原分镜的 manifest/HTML。时间由实际音频与停顿确定。排队、测试通过或文件存在不代表质量验收完成。
 
-书籍模式不要调用视频能力、分镜/视频任务、视频主轨或视频导出，不要因为缺视频模型阻塞。遇到服务、凭据或硬件缺失，完成不依赖它们的编辑工作，再说明已验证与未验证项。
-
+本地多角度人物/场景/声音资产库格式须实地调研并获访问授权；未核验前不虚构目录规则或宣称已适配。
 
 ## 身份
 

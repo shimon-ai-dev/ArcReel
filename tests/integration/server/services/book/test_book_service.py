@@ -232,3 +232,78 @@ async def test_three_persistent_voices_emotion_pause_and_partial_voice_change(ge
         after = await asyncio.to_thread(store.load)
         for segment in all_segments(after):
             assert (segment.selected_audio_version != versions[segment.id]) is (segment.speaker_id == "lin-lan")
+
+
+async def test_original_chapter_annotations_reach_vox_and_asset_change_requires_resync(generation_queue) -> None:
+    """Real original chapter/queue bridge with intercepted model HTTP, not listening acceptance."""
+    from lib.infra.json_io import atomic_write_json
+    from server.services.book.service import sync_episode
+
+    def setup() -> BookStore:
+        manager = get_project_manager()
+        manager.create_project("vox-original")
+        manager.create_project_metadata("vox-original", "原章节", extras={"output_mode": "audiobook"})
+        directory = manager.get_project_path("vox-original")
+        (directory / "source").mkdir(exist_ok=True)
+        (directory / "source/episode_1.txt").write_text("你好。", encoding="utf-8")
+        (directory / "characters").mkdir(exist_ok=True)
+        (directory / "characters/alice.wav").write_bytes(_wav())
+        project = manager.load_project("vox-original")
+        project["episodes"] = [
+            {"episode": 1, "title": "原章节", "source_origin": "own", "script_file": "episode_1.json"}
+        ]
+        project["characters"] = {"Alice": {"description": "真人", "reference_audio": "characters/alice.wav"}}
+        atomic_write_json(directory / "project.json", project)
+        atomic_write_json(
+            directory / "scripts/episode_1.json",
+            {
+                "episode": 1,
+                "content_mode": "narration",
+                "segments": [
+                    {
+                        "segment_id": "E1S01",
+                        "novel_text": "你好。",
+                        "duration_seconds": 4,
+                        "book_speech": [
+                            {
+                                "source_start": 0,
+                                "source_end": 3,
+                                "text": "你好。",
+                                "speaker_id": "Alice",
+                                "performance": {"emotion": "温柔", "style": "轻声说话"},
+                                "pause_after_seconds": 0.4,
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+        book = sync_episode("vox-original", 1, projects=manager)
+        book.voices["Alice"].base_url = "http://127.0.0.1:7862"
+        save_document("vox-original", book, projects=manager)
+        return BookStore(manager, "vox-original")
+
+    store = await asyncio.to_thread(setup)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(48000)
+        audio.writeframes(b"\0\0" * 12000)
+    with respx.mock() as mock:
+        endpoint = mock.post("http://127.0.0.1:7862/synthesize").mock(
+            return_value=httpx.Response(200, content=buffer.getvalue(), headers={"x-arcreel-tts-model": "VoxCPM2"})
+        )
+        result = await enqueue_speech("vox-original")
+        assert len(result["task_ids"]) == 1
+        await _run_pending(generation_queue, "audio")
+        payload = json.loads(endpoint.calls.last.request.content)
+        assert payload["text"] == "你好。"
+        assert payload["control"] == "温柔; 轻声说话"
+        assert payload["reference_audio"] == "vox-original/characters/alice.wav"
+        assert not (await enqueue_speech("vox-original"))["task_ids"]
+        await asyncio.to_thread((store.project_dir / "characters/alice.wav").write_bytes, _wav(0.5))
+        with pytest.raises(ValueError, match="sync"):
+            await enqueue_speech("vox-original")
+        await asyncio.to_thread(sync_episode, "vox-original", 1)
+        assert len((await enqueue_speech("vox-original"))["task_ids"]) == 1

@@ -7,6 +7,7 @@
  * - server/routers/projects.py (ProjectSummary list response)
  */
 
+import type { ExternalLibraryIdentity, ExternalReferenceView, ExternalVoice } from "@/types/library-import";
 import type { VoiceConsistencyTier } from "@/types/provider";
 import type { NarrationDelivery } from "@/types/workflow";
 import type { GenerationRoute } from "@/utils/generation-mode";
@@ -41,6 +42,10 @@ export interface CharacterDerivativeStatus extends CharacterDerivative {
 }
 
 export interface Character {
+  external_library?: ExternalLibraryIdentity;
+  reference_views?: ExternalReferenceView[];
+  external_voice?: ExternalVoice;
+  reference_audio_transcript?: string;
   description: string;
   character_sheet?: string;
   voice_style?: string;
@@ -58,6 +63,8 @@ export interface Character {
 }
 
 export interface Scene {
+  external_library?: ExternalLibraryIdentity;
+  reference_views?: ExternalReferenceView[];
   description: string;
   scene_sheet?: string;
   /** 别名：只供 AI 规划时认人参考，不参与引用。 */

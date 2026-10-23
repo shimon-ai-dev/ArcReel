@@ -98,7 +98,7 @@ _GENERATION_INPUT_SUBJECT_PARAMS: dict[str, str] = {
 
 #: 生成输入缺口里按 ``missing_text`` 列出全部缺失项的一类。
 _GENERATION_INPUT_LIST_CODES = frozenset(
-    {"reference_asset_unregistered", "reference_asset_missing", "asset_original_missing"}
+    {"reference_asset_unregistered", "reference_asset_missing", "asset_original_missing", "reference_views_unconfirmed"}
 )
 
 

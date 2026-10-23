@@ -41,12 +41,13 @@ function choiceClass(selected: boolean): string {
 }
 
 export interface WizardStepBasicsProps {
+  outputMode?: "video" | "audiobook" | "illustrated_audiobook";
   value: WizardBasicsValue;
   onChange: (next: WizardBasicsValue) => void;
   titleRef?: Ref<HTMLInputElement>;
 }
 
-export function WizardStepBasics({ value, onChange, titleRef }: WizardStepBasicsProps) {
+export function WizardStepBasics({ value, onChange, titleRef, outputMode = "video" }: WizardStepBasicsProps) {
   const { t } = useTranslation("dashboard");
   const reactId = useId();
   const titleId = `${reactId}-title`;
@@ -77,7 +78,7 @@ export function WizardStepBasics({ value, onChange, titleRef }: WizardStepBasics
 
       <WizardSection title={<span id={contentModeId}>{t("content_mode")}</span>} description={t("wizard_content_mode_hint")}>
         <div role="radiogroup" aria-labelledby={contentModeId} aria-required="true" className="grid grid-cols-3 gap-2.5">
-          {CONTENT_MODES.map(({ mode, labelKey, descKey }) => (
+          {CONTENT_MODES.filter(({ mode }) => outputMode === "video" || mode !== "ad").map(({ mode, labelKey, descKey }) => (
             <label key={mode} className={cn(choiceClass(value.contentMode === mode), "flex-col gap-1 px-3 py-2.5")}>
               <input
                 type="radio"
@@ -100,7 +101,7 @@ export function WizardStepBasics({ value, onChange, titleRef }: WizardStepBasics
         </div>
       </WizardSection>
 
-      <WizardSection title={<span id={aspectId}>{t("aspect_ratio")}</span>}>
+      {outputMode !== "audiobook" && <WizardSection title={<span id={aspectId}>{t("aspect_ratio")}</span>}>
         <div role="radiogroup" aria-labelledby={aspectId} className="flex gap-2.5">
           {ASPECT_RATIOS.map(({ ratio, labelKey, glyph }) => (
             <label key={ratio} className={cn(choiceClass(value.aspectRatio === ratio), "items-center gap-2 px-3 py-2")}>
@@ -117,9 +118,9 @@ export function WizardStepBasics({ value, onChange, titleRef }: WizardStepBasics
             </label>
           ))}
         </div>
-      </WizardSection>
+      </WizardSection>}
 
-      <GenerationRouteCards
+      {outputMode === "video" && <GenerationRouteCards
         value={value.generationRoute}
         onChange={(next) =>
           onChange({
@@ -136,7 +137,7 @@ export function WizardStepBasics({ value, onChange, titleRef }: WizardStepBasics
             onToggle={(next) => onChange({ ...value, gridStoryboard: next })}
           />
         ) : null}
-      </GenerationRouteCards>
+      </GenerationRouteCards>}
     </div>
   );
 }

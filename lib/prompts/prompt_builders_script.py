@@ -285,6 +285,14 @@ def build_drama_prompt(
     )
 
 
+BOOK_SOURCE_GUIDANCE = """
+本次为书籍音频输出，复用原有章节和分镜结构，不创建平行关键帧流程。逐字保留全部原文（含旁白、对白、说话提示与标点），不得为视频时长压缩、改写或遗漏。duration_seconds 仅为旧结构的估算字段（1 至 60），不代表视频档位或真实语音时长。完整时间线以后由实测音频决定。
+在每个原有分镜的 novel_text（旁白路线）或 source_text（剧情路线）上标注 book_speech：source_start/source_end 为该字段内零起点、左闭右开字符位置，text 必须精确等于该切片；按顺序、不重叠。speaker_id 使用已有角色 ID 或 narrator；不确定时保留待确认，不猜角色。performance 只记录语义意图（emotion、style），pause_after_seconds 记录明确停顿。VOX 的呼吸、哭笑、拉长音意图写入 style 自然语言描述，不承诺生成效果；nonverbal 保持 null，除非实际选用适配器明确支持独立非语言事件。自然普通说话、常见情绪、拉长音、呼吸、哭笑等需求不能改写朗读原文，不能声称 VOX 支持未核验参数，也不能把标记混进 text。
+环境声、动作音、配乐意图写入独立 book_sound_cues（cue_id、description、track=ambience/sfx/music、source_start/source_end），不是对白，不是假装已生成的音效文件。原文所有空隙仍要保留为旁白，不只提取对话。
+图声书沿用原分镜图及角色、场景资产，优先真人剧质感与跨镜一致性；纯有声书不要求图像提示词或图像资产。不生成视频提示词或视频任务。
+"""
+
+
 def build_normalize_prompt(
     novel_text: str,
     project_overview: dict,
@@ -303,6 +311,7 @@ def build_normalize_prompt(
     episode_outline: dict | None = None,
     next_episode_outline: dict | None = None,
     instructions: str | None = None,
+    output_mode: str = "video",
 ) -> str:
     """脚本规划的规范化 prompt：源文 → 结构化分镜内容（utterances + source_text + 视觉改编描述）。
 
@@ -324,7 +333,7 @@ def build_normalize_prompt(
 
     # source_language 来自 project.json，可能是非字符串脏数据，下游 .strip() 会崩。
     source_language = source_language if isinstance(source_language, str) else None
-    return builtin_templates.render(
+    prompt = builtin_templates.render(
         "text/drama_script_plan",
         source_kind="screenplay" if source_kind == "screenplay" else "novel",
         target_language=target_language,
@@ -346,6 +355,7 @@ def build_normalize_prompt(
         next_episode_outline=_outline_slot(next_episode_outline),
         instructions=instructions or None,
     )
+    return prompt + (BOOK_SOURCE_GUIDANCE if output_mode in {"audiobook", "illustrated_audiobook"} else "")
 
 
 def build_narration_split_prompt(
@@ -361,6 +371,7 @@ def build_narration_split_prompt(
     target_language: str = "中文",
     episode_target_duration: int | None = None,
     instructions: str | None = None,
+    output_mode: str = "video",
 ) -> str:
     """脚本规划的旁白/解说分镜拆分 prompt：源文 → 结构化分镜表（逐字 novel_text + 时长 + 资产登记）。
 
@@ -383,7 +394,7 @@ def build_narration_split_prompt(
     if default_duration is not None and int(default_duration) not in normalized_durations:
         default_duration = None
 
-    return builtin_templates.render(
+    prompt = builtin_templates.render(
         "text/narration_script_plan",
         project_overview=_overview_slot(project_overview),
         assets=_project_asset_appearances(characters, scenes, props),
@@ -399,6 +410,7 @@ def build_narration_split_prompt(
         target_language=target_language,
         instructions=instructions,
     )
+    return prompt + (BOOK_SOURCE_GUIDANCE if output_mode in {"audiobook", "illustrated_audiobook"} else "")
 
 
 def build_overview_prompt(source_content: str, source_kind: str = "novel", target_language: str = "中文") -> str:

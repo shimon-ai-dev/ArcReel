@@ -22,6 +22,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from lib.project.asset_types import ASSET_SPECS
+from lib.references.multiview_references import confirmed_reference_views, has_reference_views
 from lib.references.reference_catalog import ReferenceCatalog
 
 #: 引用了目录里没有的名字。``reference_asset_missing`` 说的是「这条资产没有可用的图」，
@@ -86,6 +87,7 @@ def admit_references(
     *,
     references: Iterable[tuple[str, str]],
     unregistered: Iterable[str] = (),
+    allow_reference_views: bool = False,
 ) -> ReferenceAdmission:
     """按引用目录判定一组已归属引用的准入。
 
@@ -120,6 +122,11 @@ def admit_references(
         if key in seen_refs:
             continue
         seen_refs.add(key)
+        if allow_reference_views and has_reference_views(entry.asset):
+            views = confirmed_reference_views(entry.asset)
+            if not views or (entry.asset_type == "character" and not any(view.role == "identity" for view in views)):
+                without_sheet.append(key)
+            continue
         if not _entry_has_sheet(entry.asset, entry.spec.sheet_field):
             without_sheet.append(key)
 
@@ -142,7 +149,9 @@ def _item_reference_names(item: Mapping[str, object]) -> list[tuple[str, str]]:
     return names
 
 
-def admit_storyboard_item(catalog: ReferenceCatalog, item: object) -> ReferenceAdmission:
+def admit_storyboard_item(
+    catalog: ReferenceCatalog, item: object, *, allow_reference_views: bool = False
+) -> ReferenceAdmission:
     """判定一条分镜条目的引用准入——分镜图、宫格图与图生视频共用。
 
     引用字段按字段名限定类型（``scenes`` 写的就是场景），故走
@@ -151,10 +160,14 @@ def admit_storyboard_item(catalog: ReferenceCatalog, item: object) -> ReferenceA
     """
     if not isinstance(item, Mapping):
         return ReferenceAdmission()
-    return admit_references(catalog, references=_item_reference_names(item))
+    return admit_references(
+        catalog, references=_item_reference_names(item), allow_reference_views=allow_reference_views
+    )
 
 
-def admit_storyboard_items(catalog: ReferenceCatalog, items: Iterable[object]) -> ReferenceAdmission:
+def admit_storyboard_items(
+    catalog: ReferenceCatalog, items: Iterable[object], *, allow_reference_views: bool = False
+) -> ReferenceAdmission:
     """整批分镜条目的合并准入结论，缺口按首次出现顺序合并去重。
 
     宫格图按分段成图、一次请求覆盖多条分镜：逐条报出后用户要提交多次才看全，合并成一份
@@ -163,7 +176,7 @@ def admit_storyboard_items(catalog: ReferenceCatalog, items: Iterable[object]) -
     unregistered: list[str] = []
     without_sheet: list[tuple[str, str]] = []
     for item in items:
-        admission = admit_storyboard_item(catalog, item)
+        admission = admit_storyboard_item(catalog, item, allow_reference_views=allow_reference_views)
         unregistered.extend(name for name in admission.unregistered if name not in unregistered)
         without_sheet.extend(entry for entry in admission.without_sheet if entry not in without_sheet)
     return ReferenceAdmission(unregistered=tuple(unregistered), without_sheet=tuple(without_sheet))

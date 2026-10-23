@@ -548,7 +548,7 @@ class ScriptGenerator:
                 before_quarantine_commit=before_quarantine_commit,
             )
 
-        if targets.kind == "scenes":
+        if targets.kind == "scenes" and self.project_json.get("output_mode", "video") == "video":
             for scene in targets.entries:
                 require_script_unit_admitted("scenes", scene, ignore_marker=True)
         logger.info(
@@ -583,7 +583,7 @@ class ScriptGenerator:
     ) -> str:
         """分镜类条目（segments / scenes / shots）的视觉层 prompt：输入是正式剧本里这些条目的内容字段。"""
         entries = list(targets.entries)
-        if targets.kind == "scenes":
+        if targets.kind == "scenes" and self.project_json.get("output_mode", "video") == "video":
             return self._build_drama_prompt_authoring_prompt(entries, episode, instructions)
         if targets.kind == "shots":
             return self._build_ad_shot_prompt_authoring_prompt(episode, targets, instructions)
@@ -707,11 +707,16 @@ class ScriptGenerator:
             content = await asyncio.to_thread(self._load_drama_script_plan_content, episode)
             raw_scenes = content.get("scenes")
             scenes: list = raw_scenes if isinstance(raw_scenes, list) else []
-            for scene in scenes:
-                require_script_unit_admitted("scenes", scene)
+            if self.project_json.get("output_mode", "video") == "video":
+                for scene in scenes:
+                    require_script_unit_admitted("scenes", scene)
             await self._assert_drama_script_plan_durations(scenes)
             return "drama", scenes
-        supported = self._storyboard_planning_durations(await self._fetch_video_request_facts())
+        supported = (
+            list(range(1, 61))
+            if self.project_json.get("output_mode", "video") in {"audiobook", "illustrated_audiobook"}
+            else self._storyboard_planning_durations(await self._fetch_video_request_facts())
+        )
         return "narration", await asyncio.to_thread(self._load_narration_script_plan, episode, supported)
 
     async def materialize_script_plan(
@@ -813,7 +818,11 @@ class ScriptGenerator:
         ``null`` 同取该字段的声明默认值——不填不代表不校验，落盘时补的正是这个默认值。归一化
         失败（如 ``"abc"``）不在此报错，交给落盘前的静态校验统一 fail-loud。
         """
-        supported = self._storyboard_planning_durations(await self._fetch_video_request_facts())
+        supported = (
+            list(range(1, 61))
+            if self.project_json.get("output_mode", "video") in {"audiobook", "illustrated_audiobook"}
+            else self._storyboard_planning_durations(await self._fetch_video_request_facts())
+        )
         allowed = {int(d) for d in supported}
         seen: set[int] = set()
         for scene in content_scenes:
@@ -979,7 +988,11 @@ class ScriptGenerator:
             supported = None
             schema: type = AdReferenceFlatScript
         else:
-            supported = self._storyboard_planning_durations(await self._fetch_video_request_facts())
+            supported = (
+                list(range(1, 61))
+                if self.project_json.get("output_mode", "video") in {"audiobook", "illustrated_audiobook"}
+                else self._storyboard_planning_durations(await self._fetch_video_request_facts())
+            )
             schema = with_new_assets_field(build_episode_script_model("ad", supported))
         return self._build_ad_prompt(episode, gen_mode, supported, instructions), schema
 

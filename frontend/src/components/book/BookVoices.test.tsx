@@ -32,3 +32,13 @@ describe("book voice adapter controls", () => {
     expect(changed.mock.lastCall?.[0].voices.narrator).toMatchObject({ adapter: "indextts2", model: "IndexTTS2", base_url: "http://127.0.0.1:7861", voice: "" });
   });
 });
+
+it("adds VoxCPM2 with explicit controllable defaults and reference transcript", async () => {
+ const changed = vi.fn();
+ function Form() { const [book, setBook] = useState({...initial,voices:{}}); return <BookVoices book={book} disabled={false} capabilities={{}} onChange={next=>{setBook(next);changed(next);}} />; }
+ const user=userEvent.setup();render(<Form/>);
+ await user.click(screen.getByRole("button",{name:"添加角色声音"}));
+ expect(changed.mock.lastCall?.[0].voices.narrator).toMatchObject({adapter:"voxcpm2",model:"VoxCPM2",settings:{clone_mode:"controllable",cfg_value:2,inference_timesteps:10,seed:42}});
+ expect(screen.getByLabelText("参考音频逐字文本（续写模式必填）")).toBeVisible();
+ expect(screen.getByRole("combobox",{name:"音色克隆模式"})).toBeVisible();
+});

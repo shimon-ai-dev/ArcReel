@@ -7,84 +7,48 @@ update_docs: fact-check
 
 # Audiobooks and illustrated audiobooks {#book-modes}
 
-Choose an output mode when creating a project: audiobook (`audiobook`), illustrated audiobook (`illustrated_audiobook`), or the existing video mode (`video`). Output mode is independent of content mode and video generation mode and cannot be changed after creation. Existing projects without this field are read as video projects without rewriting their files.
+The goal is natural, complete chapter audio, optionally accompanied by the original storyboard images. Both modes extend the existing novel/chapter workspace rather than introducing a parallel chapter or keyframe workspace.
 
-## Startup and upgrades {#startup}
+Select `audiobook`, `illustrated_audiobook`, or the existing `video` output at creation. The output mode is fixed afterward; older projects without this field remain video projects. Follow the [deployment guide](../ops/deployment.md), back up data, and update frontend and backend from the same branch. This does not automatically change a NAS or model service.
 
-Back up your data and upgrade the backend and frontend using the [deployment guide](../ops/deployment.md). Development installation still uses `uv sync` and `uv run alembic upgrade head` at the repository root, and `pnpm install` in `frontend/`. Both backend and frontend must come from the same feature branch.
+## Use the existing workspace {#audiobook}
 
-Book data lives in the project's `book/` directory and preserves the original and normalized text, chapters, stable speech segments, character voices, performance instructions, and historical audio versions. Reopen a project to continue generation or retry failed segments; retrying another segment does not delete successful outputs.
+1. Import a novel or chapter through the original interface. Keep its chapter navigation, breakdown review, character/scene assets, and right-side Agent. Original chapters and formal scripts remain authoritative.
+2. The built-in breakdown preserves the full source within original storyboard units and annotates speakers, performance intentions, pauses, and separate sound cues. Annotations must match exact source spans; emotion and sound directions never become spoken text. Unconfirmed speakers require review.
+3. Synchronize the reviewed chapter in its audio area and configure narrator/character voices. Existing character voice references can be reused. Changes to original chapters, voice references, or storyboards require synchronization; an older export cannot certify the changed content.
+4. Generate missing or stale speech and listen before exporting. Evaluate stable cloned identity, natural ordinary speech, emotions, pauses, elongation, breathing, crying, and laughter. Recording an intention does not establish provider support or acceptable output.
+5. Ambience, effects, and music use separate tracks. Breakdown cues are intentions, not generated files. Supply authorized media and configure mixing, ranges, and speech ducking.
 
-## Producing an audiobook {#audiobook}
+Audiobooks skip image and video stages and need neither model type. Timing comes from actual audio lengths and explicit silence, not video duration tiers.
 
-1. Create an audiobook project and import the full novel. No image or video model configuration is required.
-2. Review chapters and speech segments. All original text is retained by default, including chapter headings, narration, and phrases such as “he said.” Automatic splitting does not establish correct speaker identification; a person or Agent must review unconfirmed segments.
-3. Configure voices for the narrator and characters, then confirm each segment's speaker. Character IDs refer to persistent voice profiles shared across chapters.
-4. Set emotion, expression descriptions, and pauses after segments. Emotion is stored separately from the text and is not appended to the spoken content. Pronunciation corrections use independent replacement mappings tied to source positions, preserving the original text.
-5. Generate and preview speech. Failed segments retain their errors and a retry option. Changing a voice or performance settings invalidates only affected segments; changing pauses recalculates only the timeline.
-6. Import sound effects, ambience, or music and anchor them to speech segments with offsets. Set volume, fades, looping, and duration. Ambience and music are reduced during speech. Verify your rights to use each asset; its source is recorded in the event.
-7. Export chapter and whole-book WAV or MP3 files. Missing, failed, or stale required speech blocks export. Source-text coverage and actual voice quality are separate checks: passing coverage does not establish correct pronunciation, emotion, or voice identity.
+## VOX and capability boundaries {#local-tts}
 
-The timeline uses actual audio sample lengths and explicitly inserted silence, not video duration presets. Images and effects are anchored to speech segments and automatically retimed after regeneration. Effects spanning chapters preserve their loop phase and complete fade envelope instead of restarting at chapter boundaries. Fix effects extending beyond the whole book before exporting; export does not silently truncate them.
+The [VoxCPM2 guide](./voxcpm2.md) describes its actual interface, reference audio, and limitations. Do not pass another TTS model's controls to VOX or advertise IndexTTS2 emotion vectors/tags as VOX features. Generic TTS, the optional IndexTTS2 bridge, and VOX have separately verified capabilities. Unsupported controls must fail explicitly, not silently disappear or switch the voice.
 
-Export rereads actual audio lengths and verifies recorded speech digests. Completion receipts retain SHA-256 digests of source assets and exported files; replacing or corrupting a file invalidates completion. Images must decode successfully; a valid-looking filename extension is insufficient.
+The deployer supplies model installations, weights, service configuration, and authorization. ArcReel does not automatically download models, sign in, or create credentials. Endpoint availability and contract tests are not real-model or listening acceptance.
 
-## Local emotional TTS {#local-tts}
+## Reuse original storyboard images {#illustrated}
 
-The local emotional adapter connects to an optional IndexTTS2 bridge supplied by ArcReel. It calls the [official IndexTTS Python API](https://github.com/index-tts/index-tts), not an official upstream HTTP API. The bridge runs separately from ArcReel and does not automatically install models, download weights, or create credentials.
+Illustrated audiobook images are the existing storyboard images. Use the original image provider, character/scene/prop references, and storyboard generation, then synchronize audio playback anchors. Do not create a second keyframe generator. See the [ComfyUI guide](./comfyui.md). Video generation, video editing timelines, and MP4 stages are skipped; the original video mode remains unchanged.
 
-Prepare the IndexTTS2 environment and model weights following the upstream instructions, then install FastAPI, Uvicorn, and HTTPX in that environment for the bridge. Add the ArcReel repository to PYTHONPATH and run:
+The visual goal is realistic live-action character and scene continuity rather than a default anime appearance. Multi-angle portraits, full-body views, and base views must respect the actual provider's reference-image capability. Accepting multiple images is not proof of visual consistency.
 
-```bash
-PYTHONPATH=/path/to/ArcReel:$PYTHONPATH python /path/to/ArcReel/scripts/book/index_bridge.py \
-  --model-dir /path/to/checkpoints_2 \
-  --reference-root /path/to/voices \
-  --port 7861
-```
+## Reuse a local multi-view library {#local-library}
 
-The service listens only on `127.0.0.1`. Do not expose it directly to the public internet. Authentication, reverse proxies, and network permissions for cross-machine deployment must be configured separately by the operator. Voice references must reside inside the specified reference directory; only relative filenames are accepted, not paths escaping the directory or symbolic links. You must own or have permission to use the reference audio.
+Import and update previews live in the original character/scene asset panels. On a computer that can read the library, run the read-only converter against the library root containing both published entries and archive content. It reads existing indexes, approval evidence and safe links to generate a portable bundle; users do not hand-author a new manifest. Select that generated folder in the original asset panel, inspect additions, changes, conflicts and pending voice applicability, then confirm. See [existing library bundles](./existing-library-bundles.md) for the command and supported dialect.
 
-Select `indextts2` for the character voice, enter `http://127.0.0.1:7861` as the service URL, and use a reference filename such as `narrator.wav`. The bridge specifically uses the official `indextts.infer_v2.IndexTTS2`, not `infer_v2_5`; do not mix their weights or interfaces.
+Archive versions, product versions, character baselines, looks and scene states remain separate. The converter never edits sources; missing sources do not delete existing project references. Frozen content cannot change within the same version. Explicitly selecting a different version requires preview and retains old content. Technical voice checks do not imply listening, model adaptation or clone-quality acceptance. Unconfirmed voice-to-baseline applicability never silently activates a voice.
 
-The adapter explicitly supports:
+Original storyboard generation uses explicitly confirmed views and requires a character identity anchor. It allocates references across characters/scenes and preceding-frame continuity before additional shot-appropriate headshot, full-body and appearance views. Prompts distinguish identity, clothing and pose roles. Actual provider capacity determines the limit; existing prompt previews and receipts identify sent and omitted views rather than promising all seven views are forwarded.
 
-- Chinese and English, with a maximum of 1000 characters per segment; default import uses shorter segments.
-- Voice cloning from reference audio.
-- Eight-dimensional emotion vectors ordered as happy, angry, sad, afraid, disgusted, melancholic, surprised, and calm.
-- Natural-language emotion descriptions converted through the model's emotion analysis without being added to the text.
-- Emotion intensity and deterministic programmatically inserted pauses.
+A browser folder selection does not mount an arbitrary computer path on the NAS. Published entries may link to archives outside the product folder, so choose the full library root; the converter rejects escapes. Synthetic fixtures verify this implementation, not actual-library conversion, NAS mounts or real-model image consistency.
 
-The adapter does not advertise speed control or native nonverbal tags for gasping, crying, or laughing. Unsupported controls fail explicitly rather than being silently ignored. Sourced sound effects can supplement nonverbal utterances, but cannot guarantee consistency with the cloned character's voice. Existing generic ArcReel TTS providers remain reusable with conservative capability declarations; an ordinary TTS provider is not assumed to support emotional control.
+## Export and verification {#verification}
 
-Successful installation, a reachable endpoint, and contract tests are not real-model validation. Actual generation and listening are required to confirm usability with a particular machine, weights, and voice reference.
+Export chapter and whole-book WAV/MP3. Illustrated output also includes a ZIP with audio, original storyboard images, a manifest, and an HTML player. Extract and open index.html; if the browser restricts local media, serve the extracted directory with a local static server. The player supports pause, seeking, chapters, and playback rate, with images following actual audio time.
 
-## Producing and playing an illustrated audiobook {#illustrated}
+Missing, failed, stale, or incomplete speech prevents valid completion. Export validates actual media, digests, and receipts; replaced or damaged resources invalidate an older completion proof.
 
-Illustrated audiobooks reuse all audiobook functionality and add keyframes. Each image is anchored to a speech segment and remains visible across subsequent segments until the next image begins. Images need not correspond one-to-one with TTS segments. An image must be available at the start of each chapter; the last image of the previous chapter may carry over.
+An existing synthetic package passed Chromium playback, pause, forward/backward image seeking, chapter switching, and playback-rate retention in GitHub Actions. Evidence is in repository `docs/verification/book-modes-2026-10-21.md`. Unit/integration tests cover contracts, source spans, original-workflow branches, mixing, and ffmpeg encoding/decoding. These are engineering fixtures, not real TTS or image-quality acceptance.
 
-Choose an existing image provider or prepare a local image service using the [ComfyUI integration guide](./comfyui.md), then generate keyframes. Illustrated audiobooks do not query required video capabilities, generate MP4 files, or require video model configuration.
-
-The exported ZIP contains chapter audio, whole-book audio, images, `manifest.json`, and `index.html`. Extract it and open `index.html`; the player embeds its manifest and does not depend on fetch access to a local JSON file. If your browser restricts local audio resources, run this in the extracted directory:
-
-```bash
-python -m http.server 8000
-```
-
-Then open `http://localhost:8000`. The player uses the audio clock to synchronize images and current text, with pause, seeking, playback speed, and chapter selection. Chapter changes preserve playback speed. If playback fails, the page displays instructions for serving the package locally.
-
-## Verification and explicit limitations {#verification}
-
-Real-model end-to-end generation and listening remain unverified and require usable model services and weights. A synthetic package passed actual Chromium playback, pause, forward/backward image seeking, chapter switching, and playback-rate retention in GitHub Actions. This does not establish real speech or image model quality. See `docs/verification/book-modes-2026-10-21.md` in the repository for evidence.
-
-Unit tests check separation of emotion from text, capability rejection, bridge parameters, complete coverage, pauses, and mixing. Integration tests use real ffmpeg WAV/MP3 encoding and decoding and verify packages and completion receipts. Synthetic waveforms in tests are engineering fixtures, not TTS output.
-
-Generate a reproducible player test package:
-
-```bash
-uv run python scripts/book/make_fixture.py /tmp/new-book-fixture
-node scripts/book/check_player.mjs /absolute/path/to/unzipped/index.html
-```
-
-Browser checks use the frontend Playwright dependency. Set `CHROMIUM_EXECUTABLE` to select a system Chromium installation. The script checks image changes after seeking, chapter changes, and preservation of playback speed. Environments that have not actually run the browser or models cannot claim acceptance on that basis.
-
-The first release does not include M4B, automatically generated effects, illustrated-audiobook slideshow video, or automatic assessment of pronunciation and character voice quality. Export mixes each chapter and writes the whole-book WAV chapter by chapter; split exceptionally long chapters to limit memory use.
+Real VOX listening, image consistency, and local asset-library compatibility still need actual services and authorized media. This stage excludes M4B, automatic ambience generation, full-video acceptance, and automatic voice-quality scoring.

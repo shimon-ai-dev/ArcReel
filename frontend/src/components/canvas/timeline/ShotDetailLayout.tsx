@@ -123,11 +123,11 @@ export function ShotMediaGrid({
     <div
       className={cn(
         "grid items-start gap-x-4 gap-y-5",
-        portrait ? "@min-[440px]/shot-media:grid-cols-2" : "@min-[720px]/shot-media:grid-cols-2",
+        video && (portrait ? "@min-[440px]/shot-media:grid-cols-2" : "@min-[720px]/shot-media:grid-cols-2"),
       )}
     >
       <div className="min-w-0">{storyboard}</div>
-      <div className="flex min-w-0 flex-col">{video}</div>
+      {video && <div className="flex min-w-0 flex-col">{video}</div>}
       {audio ? (
         <div
           className={cn(

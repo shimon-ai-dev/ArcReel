@@ -19,6 +19,7 @@ from lib.project.project_manager import ProjectManager, get_project_manager
 from server.auth import CurrentUser
 from server.services.book.service import (
     book_store,
+    edit_segment,
     enqueue_export,
     enqueue_keyframe,
     enqueue_speech,
@@ -26,6 +27,7 @@ from server.services.book.service import (
     media_path,
     save_document,
     snapshot,
+    sync_episode,
 )
 
 Projects = Annotated[ProjectManager, Depends(get_project_manager)]
@@ -68,6 +70,15 @@ async def get_book(project_name: str, projects: Projects, queue: Queue):
     return result
 
 
+@router.post("/episodes/{episode}/sync")
+async def post_sync_episode(project_name: str, episode: int, projects: Projects, queue: Queue):
+    try:
+        await run_sync_transaction(sync_episode, project_name, episode, projects=projects)
+        return await get_book(project_name, projects, queue)
+    except (ValueError, FileNotFoundError) as exc:
+        raise _error(exc) from exc
+
+
 @router.put("/source")
 async def put_source(project_name: str, request: SourceRequest, projects: Projects):
     try:
@@ -88,13 +99,8 @@ async def put_document(project_name: str, request: BookDocument, projects: Proje
 
 @router.put("/segments/{segment_id}/text")
 async def put_segment_text(project_name: str, segment_id: str, request: SegmentTextRequest, projects: Projects):
-    from lib.book.domain import replace_segment_text
-
     try:
-        store = await asyncio.to_thread(book_store, project_name, projects=projects)
-        document = await run_sync_transaction(
-            store.update, lambda book: replace_segment_text(book, segment_id, request.text)
-        )
+        document = await run_sync_transaction(edit_segment, project_name, segment_id, request.text, projects=projects)
         return document.model_dump(mode="json")
     except (ValueError, FileNotFoundError) as exc:
         raise _error(exc) from exc
@@ -152,7 +158,9 @@ async def get_media(project_name: str, relative: str, projects: Projects):
     try:
         store = await asyncio.to_thread(book_store, project_name, projects=projects)
         if not relative.startswith("book/"):
-            raise ValueError("Only book media can be downloaded here")
+            book = await asyncio.to_thread(store.load)
+            if book.origin != "episodes" or relative not in {frame.path for frame in book.keyframes}:
+                raise ValueError("Only book media and linked storyboard images can be downloaded here")
         path = await asyncio.to_thread(media_path, store.project_dir, relative)
         if path.suffix.lower() not in {".wav", ".mp3", ".png", ".jpg", ".jpeg", ".webp", ".ogg"}:
             raise ValueError("Unsupported book media type")

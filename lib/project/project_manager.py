@@ -1916,7 +1916,7 @@ class ProjectManager:
 
         with open(project_file, encoding="utf-8") as f:
             project = json.load(f)
-        project["output_mode"] = project_output_mode(project)
+        project_output_mode(project)  # Validate without injecting defaults into read snapshots.
         return project
 
     @contextmanager
@@ -2071,7 +2071,7 @@ class ProjectManager:
                     previous
                 ) != project_output_mode(project):
                     raise ValueError("output_mode is fixed when a project is created")
-            project["output_mode"] = project_output_mode(project)
+            project_output_mode(project)  # Preserve legacy metadata without a persisted default.
             if self._requires_unique_asset_namespace(project):
                 ensure_project_asset_namespace(project)
             atomic_write_json(project_file, project)
@@ -2285,6 +2285,15 @@ class ProjectManager:
             copies=copies,
             on_commit=on_commit,
         )
+
+    def update_project_with_file_writes(
+        self,
+        project_name: str,
+        mutate_fn: Callable[[dict], None],
+        writes: list[tuple[bytes, Path]],
+    ) -> dict:
+        """Commit uploaded bytes and asset metadata under the same project lock."""
+        return self._update_project_with_files(project_name, mutate_fn, writes=writes)
 
     def _update_project_with_files(
         self,

@@ -5,7 +5,7 @@ description: 为分镜或自包含视频单元生成视频。当用户要求生�
 
 # 生成视频
 
-书籍模式优先分流：output_mode 为 audiobook 或 illustrated_audiobook 时改用 book-production skill 与 book_project 工具；本 skill 的视频模型、分镜及视频旁白流程不适用。
+audiobook 和 illustrated_audiobook 不执行本 skill 的视频或旧视频旁白生成；语音改用 book-production。原章节和图声书分镜图流程仍保留。
 
 ## 路由
 

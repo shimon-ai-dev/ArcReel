@@ -575,3 +575,164 @@ class TestGridReferences:
 
         with pytest.raises(ValueError, match="E1S09"):
             _grid(fixture, [TARGET, "E1S09"])
+
+
+class TestImportedMultiview:
+    def _add_views(self, fixture: _Fixture, name: str = "张三") -> None:
+        views = []
+        for framing, angles in (
+            ("headshot", ("front", "left", "right")),
+            ("full_body", ("front", "left", "right", "back")),
+        ):
+            for angle in angles:
+                path = f"characters/refs/{name}-{framing}-{angle}.png"
+                fixture.write_image(path, shade=len(views) + 10)
+                views.append({"path": path, "role": "identity", "view": angle, "framing": framing, "confirmed": True})
+        fixture.project["characters"][name] = {"description": "actor", "reference_views": views}
+
+    def test_four_slots_preserve_two_identities_scene_and_previous_frame(self, tmp_path):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        self._add_views(fixture, "李四")
+        fixture.target().update(characters_in_shot=["张三", "李四"], products_in_shot=[], props=[])
+        result = _admitted(fixture)
+
+        with result.freeze(max_reference_images=4, model="configured-workflow", bind_claims=_identity_binder) as frozen:
+            assert [(ref.logical_type, ref.logical_id) for ref in frozen.references.visual_references] == [
+                ("character", "张三"),
+                ("character", "李四"),
+                ("scene", "祠堂"),
+                ("storyboard", "E1S01"),
+            ]
+            assert "张三 / 大头照 / 正面 / 身份基准" in frozen.prompt
+            assert "李四 / 大头照 / 正面 / 身份基准" in frozen.prompt
+            assert "图4为上一分镜图" in frozen.prompt
+            assert "图5" not in frozen.prompt
+            warning = frozen.warnings[0]
+            assert warning["key"] == "ref_multiview_selected"
+            assert "张三 / identity / headshot / front" in warning["params"]["selected"]
+            assert "李四 / identity / full_body / back" in warning["params"]["omitted"]
+            assert frozen.basis == result.expected_basis()
+
+    @pytest.mark.parametrize(
+        ("prompt", "expected"),
+        [
+            ("@[张三] left profile close-up", ("identity", "headshot", "left")),
+            ("@[张三] full-body back view", ("look", "full_body", "back")),
+            ("@[张三] stands beside the doorway", ("look", "full_body", "back")),
+        ],
+    )
+    def test_spare_slot_is_selected_for_the_shot_and_preview_matches_execution(self, tmp_path, prompt, expected):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        look_path = "characters/refs/look-back.png"
+        fixture.write_image(look_path)
+        fixture.project["characters"]["张三"]["reference_views"].append(
+            {
+                "path": look_path,
+                "role": "look",
+                "framing": "full_body",
+                "view": "back",
+                "confirmed": True,
+            }
+        )
+        fixture.target().update(characters_in_shot=["张三"], products_in_shot=[], props=[], image_prompt=prompt)
+        result = _admitted(fixture)
+        preview = result.render(max_reference_images=4, model="configured-workflow")
+
+        with result.freeze(max_reference_images=4, model="configured-workflow", bind_claims=_identity_binder) as frozen:
+            last = frozen.references.visual_references[-1]
+            assert (last.role, last.framing, last.view) == expected
+            assert (preview.prompt, preview.warnings) == (frozen.prompt, frozen.warnings)
+            assert frozen.references.visual_references[0].role == "identity"
+            assert "图1" in frozen.prompt
+
+    @pytest.mark.parametrize("confirmed", [False, None])
+    def test_pending_or_only_frozen_views_do_not_become_approved_through_legacy_fallback(self, tmp_path, confirmed):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        asset = fixture.project["characters"]["张三"]
+        asset["reference_image"] = asset["reference_views"][0]["path"]
+        for view in asset["reference_views"]:
+            view.update(confirmed=confirmed, frozen=True)
+        fixture.target().update(characters_in_shot=["张三"], products_in_shot=[], props=[], scenes=[])
+
+        result = fixture.assemble()
+
+        assert InputGap("reference_views_unconfirmed", "character", "张三") in result.gaps
+        assert not any(ref.visual.logical_type == "character" for ref in result.references)
+
+    def test_unconfirmed_missing_view_is_not_sent_but_missing_approved_view_blocks(self, tmp_path):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        views = fixture.project["characters"]["张三"]["reference_views"]
+        views.append(
+            {
+                "path": "characters/refs/pending-look.png",
+                "role": "look",
+                "view": "front",
+                "framing": "full_body",
+                "confirmed": False,
+            }
+        )
+        fixture.target().update(characters_in_shot=["张三"], products_in_shot=[], props=[], scenes=[])
+
+        admitted = _admitted(fixture)
+        assert all(ref.artifact_path != "characters/refs/pending-look.png" for ref in admitted.references)
+        views[-1]["confirmed"] = True
+
+        assert InputGap("asset_original_missing", "character", "张三") in fixture.assemble().gaps
+
+    def test_a_look_without_an_identity_anchor_is_refused(self, tmp_path):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        for view in fixture.project["characters"]["张三"]["reference_views"]:
+            view["role"] = "look"
+        fixture.target().update(characters_in_shot=["张三"], products_in_shot=[], props=[], scenes=[])
+
+        assert InputGap("reference_views_unconfirmed", "character", "张三") in fixture.assemble().gaps
+
+    def test_mixed_import_and_legacy_sheet_keeps_both_subjects(self, tmp_path):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        fixture.target().update(characters_in_shot=["张三", "张三/劲装"], products_in_shot=[], props=[], scenes=[])
+        # The legacy derivative remains a separate, explicitly referenced asset.
+        fixture.project["characters"]["张三"]["derivatives"] = _project()["characters"]["张三"]["derivatives"]
+        result = _admitted(fixture)
+
+        assert [(ref.visual.logical_id, ref.visual.role) for ref in result.references[:3]] == [
+            ("张三", "identity"),
+            ("张三/劲装", "asset_sheet"),
+            ("E1S01", "previous_storyboard"),
+        ]
+
+    def test_view_labels_are_part_of_provenance_but_paths_are_not(self, tmp_path):
+        fixture = _Fixture(tmp_path)
+        self._add_views(fixture)
+        fixture.target().update(characters_in_shot=["张三"], products_in_shot=[], props=[], scenes=[])
+        before = _admitted(fixture).expected_basis()
+        fixture.project["characters"]["张三"]["reference_views"][0]["view"] = "three_quarter"
+
+        assert _admitted(fixture).expected_basis() != before
+
+    def test_imported_scene_views_do_not_require_a_generated_sheet(self, tmp_path):
+        fixture = _Fixture(tmp_path)
+        path = "scenes/refs/temple-front.png"
+        fixture.write_image(path)
+        fixture.project["scenes"]["祠堂"] = {
+            "reference_views": [
+                {
+                    "path": path,
+                    "role": "space",
+                    "view": "front",
+                    "framing": "wide",
+                    "confirmed": True,
+                }
+            ]
+        }
+        fixture.target().update(characters_in_shot=[], products_in_shot=[], props=[])
+        result = _admitted(fixture)
+
+        assert result.references[0].artifact_path == path
+        assert result.references[0].claim is None
+        assert "空间参考" in result.render(max_reference_images=4, model="configured-workflow").prompt

@@ -292,6 +292,8 @@ def _step_done(step_id: str, status: WorkflowStatus) -> bool:
         return has_items and not artifacts.get("storyboards", {}).get("missing_ids")
     if step_id == "video":
         return has_items and not artifacts.get("videos", {}).get("missing_ids")
+    if step_id == "book":
+        return bool(artifacts.get("book", {}).get("complete"))
     if step_id == "edit":
         return has_items and bool(artifacts.get("edit_timelines", {}).get("timeline_ids"))
     return False
@@ -382,34 +384,10 @@ def build_workflow_plan(
     """
 
     plan_problems = [workflow_problem(problem) for problem in project_problems or []]
-    if getattr(status.project, "output_mode", "video") != "video":
-        tasks = list(task_observations or [])
-        complete = bool(status.artifacts.get("book", {}).get("complete", False))
-        state = (
-            WorkflowStepState.COMPLETED
-            if complete
-            else WorkflowStepState.ACTIVE
-            if tasks
-            else WorkflowStepState.BLOCKED
-            if status.blockers
-            else WorkflowStepState.READY
-        )
-        return WorkflowPlan(
-            status=status,
-            steps=[
-                WorkflowPlanStep(
-                    id="book",
-                    state=state,
-                    required=True,
-                    action=None if complete else status.next_action,
-                    artifacts=dict(status.artifacts.get("book", {})),
-                    tasks=tasks,
-                )
-            ],
-            blockers=list(status.blockers),
-            problems=plan_problems,
-            next_action=status.next_action,
-        )
+    book_mode = status.project.output_mode != "video"
+    audio_only = status.project.output_mode == "audiobook"
+    if book_mode:
+        admission = None
 
     try:
         rules = workflow_rule(status.project.content_mode, status.project.generation_mode).steps
@@ -427,7 +405,22 @@ def build_workflow_plan(
             problems=plan_problems,
             next_action=status.next_action,
         )
-    owner = _owner_step(status)
+    if book_mode:
+        rules = tuple(
+            WorkflowStepRule(
+                rule.id,
+                False
+                if rule.id in {"video", "edit"} or (audio_only and rule.id in {"asset_sheets", "storyboard"})
+                else rule.applicable,
+            )
+            for rule in rules
+        )
+        rules += (WorkflowStepRule("book", True),)
+    owner = (
+        "book"
+        if book_mode and (status.next_action.args.get("tool") == "book_project" or workflow_finished(status))
+        else _owner_step(status)
+    )
     complete = workflow_finished(status)
     structure_problems = list(structure_problems or [])
     task_observations = list(task_observations or [])
@@ -435,7 +428,7 @@ def build_workflow_plan(
     steps: list[WorkflowPlanStep] = []
 
     for step_rule in rules:
-        artifact_key = _ARTIFACT_BY_STEP.get(step_rule.id)
+        artifact_key = "book" if step_rule.id == "book" else _ARTIFACT_BY_STEP.get(step_rule.id)
         # 走完的工作流没有下一步可挂：完成的「剪辑」一步不带动作。
         owns = step_rule.id == owner and not complete
         step = WorkflowPlanStep(
@@ -474,6 +467,8 @@ def build_workflow_plan(
         if step_id is None:
             continue
         step = by_id[step_id]
+        if step.state is WorkflowStepState.SKIPPED:
+            continue
         step.tasks.append(observation)
         if observation.status in {"queued", "running"}:
             step.state = WorkflowStepState.ACTIVE
@@ -483,7 +478,13 @@ def build_workflow_plan(
     if admission is not None and admission.get("decision") != "admitted" and not video_step.tasks:
         video_step.state = WorkflowStepState.BLOCKED
 
-    active_tasks = [task for task in task_observations if task.status in {"queued", "running"}]
+    active_tasks = [
+        task
+        for step in steps
+        if step.state is not WorkflowStepState.SKIPPED
+        for task in step.tasks
+        if task.status in {"queued", "running"}
+    ]
     if status.blockers:
         next_action = status.next_action
     elif structure_problems:

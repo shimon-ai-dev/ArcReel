@@ -63,6 +63,8 @@ export function EpisodePageHeader({
     grid: t("episode_view_grid"),
     board: boardLabel,
     edit: t("episode_view_edit"),
+    audio: t("book_episode_audio"),
+    listen: t("book_episode_listen"),
   };
   return (
     <header className="shrink-0 border-b border-border">

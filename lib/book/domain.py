@@ -69,6 +69,11 @@ def validate_coverage(book: BookDocument) -> None:
             if event.id in event_ids or event.segment_id not in seen:
                 raise BookValidationError(f"Duplicate or unanchored {kind} event: {event.id}")
             event_ids.add(event.id)
+    cue_ids: set[str] = set()
+    for cue in book.sound_cues:
+        if cue.id in cue_ids or cue.segment_id not in seen or cue.end_segment_id not in seen:
+            raise BookValidationError(f"Duplicate or unanchored sound intention: {cue.id}")
+        cue_ids.add(cue.id)
     for effect in book.effects:
         if effect.end_segment_id is not None and effect.end_segment_id not in seen:
             raise BookValidationError(f"Missing sound end anchor: {effect.id}")
@@ -92,13 +97,18 @@ def spoken_text(segment: SpeechSegment) -> str:
 def segment_fingerprint(book: BookDocument, segment: SpeechSegment) -> str:
     """Only synthesis inputs count: pauses and unrelated voices do not invalidate speech."""
     voice = book.voices.get(segment.speaker_id)
+    voice_data = voice.model_dump(mode="json") if voice else None
+    if voice_data is not None:
+        voice_data.pop("source_character", None)
+    if voice_data is not None and voice_data.get("reference_text") is None:
+        voice_data.pop("reference_text", None)
     return prefixed_canonical_json_digest(
         {
             "version": 1,
             "text": spoken_text(segment),
             "source_text": segment.text,
             "speaker_id": segment.speaker_id,
-            "voice": voice.model_dump(mode="json") if voice else None,
+            "voice": voice_data,
             "performance": segment.performance.model_dump(mode="json"),
         }
     )

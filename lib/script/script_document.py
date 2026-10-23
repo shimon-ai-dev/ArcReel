@@ -70,6 +70,9 @@ def prepare_script_entries(script_data: dict[str, Any], *, project: Mapping[str,
             continue
         # 本轮产出的条目视觉层已由提示词编写写回；内容确认转换在此之后为全部条目重新置位。
         item.pop(PENDING_AUTHORING_FIELD, None)
+        if project.get("output_mode", "video") in {"audiobook", "illustrated_audiobook"}:
+            item.pop("needs_replan", None)
+            continue
         admission = admit_script_unit(kind, item, ignore_marker=True)
         if admission.allowed:
             item.pop("needs_replan", None)
@@ -166,7 +169,7 @@ def build_materialized_script(
     prepare_script_entries(script_data, project=project, episode=episode)
     finish_script_document(script_data, project=project, episode=episode, generator=SCRIPT_PLAN_CONVERSION_GENERATOR)
     for item in script_data[items_key]:
-        item[PENDING_AUTHORING_FIELD] = True
+        item[PENDING_AUTHORING_FIELD] = project.get("output_mode", "video") != "audiobook"
     return script_data
 
 

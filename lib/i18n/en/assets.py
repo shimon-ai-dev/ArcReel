@@ -1,4 +1,9 @@
 MESSAGES = {
+    "asset_library_import_invalid": "This library bundle cannot be imported. Check the manifest and uploaded files, then preview again",
+    "asset_library_import_stale": "The assets changed after the preview. Preview the import again before applying",
+    "asset_library_import_conflict": "The import would replace a protected asset. Resolve the preview conflicts and try again",
+    "asset_library_import_content_conflict": "Stored library media does not match its content identity. Nothing was changed; restore the media before importing",
+    "val_asset_library_metadata_invalid": "Asset '{name}' has invalid imported library metadata in '{field}'",
     "asset_not_found": "Asset '{name}' does not exist",
     "asset_already_exists": "An asset named '{name}' already exists under the same type",
     "asset_invalid_type": "Asset type must be character / scene / prop",

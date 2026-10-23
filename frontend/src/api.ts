@@ -141,6 +141,7 @@ import type {
   PresentationResourceType,
 } from "@/types/presentation";
 import type { Asset, AssetType, AssetCreatePayload, AssetListPage, AssetUpdatePayload } from "@/types/asset";
+import type { ExternalLibraryPreview } from "@/types/library-import";
 import type { AgentMemoryOverview, AgentMemoryScope } from "@/types/agent-memory";
 import type {
   EpisodeNextStep,
@@ -3932,6 +3933,36 @@ class API {
   }
 
   // ==================== Global Asset Library ====================
+
+  /** Browser-selected content only; paths in the manifest are never read on the server. */
+  static async previewExternalLibrary(projectName: string, manifest: string, files: File[]) {
+    return this.uploadExternalLibrary(projectName, "preview", manifest, files);
+  }
+
+  static async applyExternalLibrary(projectName: string, manifest: string, files: File[], previewToken: string) {
+    return this.uploadExternalLibrary(projectName, "apply", manifest, files, previewToken);
+  }
+
+  private static async uploadExternalLibrary(
+    projectName: string,
+    action: "preview" | "apply",
+    manifest: string,
+    files: File[],
+    previewToken?: string,
+  ): Promise<ExternalLibraryPreview> {
+    const form = new FormData();
+    form.append("manifest", manifest);
+    for (const file of files) form.append("files", file, file.name);
+    if (previewToken) form.append("preview_token", previewToken);
+    const endpoint = `/projects/${encodeURIComponent(projectName)}/assets/library-import/${action}`;
+    const response = await fetch(`${API_BASE}${endpoint}`, withAuth(endpoint, { method: "POST", body: form }));
+    if (!response.ok) {
+      handleUnauthorized(response);
+      const error = (await response.json().catch(() => ({ detail: response.statusText }))) as { detail?: unknown };
+      throw new Error(typeof error.detail === "string" ? error.detail : i18n.t("errors:request_failed"));
+    }
+    return response.json() as Promise<ExternalLibraryPreview>;
+  }
 
   static async listAssets(
     params: { type?: AssetType; q?: string; limit?: number; offset?: number } = {},

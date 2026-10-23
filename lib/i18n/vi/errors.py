@@ -1,4 +1,7 @@
 MESSAGES = {
+    "ref_multiview_selected": "Đã chọn {max_count} trong {count} ảnh tham chiếu cho {model}. Đã gửi: {selected}. Không gửi: {omitted}.",
+    "reference_views_unconfirmed": "Tài sản cần ảnh tham chiếu đã được xác nhận rõ ràng (nhân vật cần ảnh nhận dạng): {missing_text}. Hãy xác nhận ảnh thư viện trước khi tạo.",
+    "image_reference_images_exceeded": "Quy trình {model} có {limit} vị trí ảnh tham chiếu nhưng nhận được {count} ảnh. Hãy xem trước và giảm số ảnh đã chọn trước khi thử lại.",
     "episode_position_name": "Tập {position}",
     "episode_unlisted_name": "Tập chưa đặt tên",
     "episode_script_name": "Kịch bản của “{name}”",

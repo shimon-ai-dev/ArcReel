@@ -103,9 +103,13 @@ async def test_book_orientation_does_not_require_video_provider(book_services: S
     assert denied.problem.code == "book_has_no_video_workflow"
     state = await asyncio.to_thread(WorkflowStateService(book_services.projects).get_status, "book-demo")
     plan = build_workflow_plan(state)
-    assert [step.id for step in plan.steps] == ["book"]
-    assert plan.next_action.args == {"tool": "book_project", "action": "import_source"}
-    assert not any("video" in step.id for step in plan.steps)
+    steps = {step.id: step for step in plan.steps}
+    assert {"project_input", "episode_plan", "script_plan_content", "final_script", "book"} <= steps.keys()
+    assert steps["video"].state == "skipped"
+    assert steps["edit"].state == "skipped"
+    assert steps["storyboard"].state == "skipped"
+    assert plan.next_action.type == "collect_project_input"
+    assert plan.next_action.args.get("action") != "import_source"
 
 
 @pytest.mark.parametrize(
