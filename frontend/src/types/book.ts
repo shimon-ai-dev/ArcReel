@@ -40,7 +40,7 @@ export interface BookKeyframe {
   status: BookSegment["status"]; task_id: string | null; error: string | null; versions?: BookKeyframeVersion[];
 }
 export interface BookDocument {
-  origin?: "episodes" | string;
+  origin?: string;
   sound_cues?: { id: string; episode: number; unit_id: string; segment_id: string; end_segment_id: string | null; description: string; track: "ambience" | "sfx" | "music" }[];
   schema_version: 1; revision: number; title: string; original_text: string; normalized_text: string;
   chapters: BookChapter[]; voices: Record<string, BookVoice>; effects: BookEffect[]; keyframes: BookKeyframe[];
